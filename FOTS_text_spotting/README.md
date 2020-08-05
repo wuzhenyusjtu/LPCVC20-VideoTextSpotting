@@ -11,7 +11,7 @@ python setup.py build develop
 ```
 
 ## Dataset
-- Sample Dataset [[link]]()
+- Sample Dataset [[link]](https://drive.google.com/file/d/12wAhuYJWizs_kMTd7lYcurnFd7Ntc9Y_/view?usp=sharing)
 - Totaltext training, testing images, and annotations [[link]](https://universityofadelaide.box.com/shared/static/3eq5ti7z45qfq5gu96gg5t1xwh1yrrt7.zip)
 - MLT [[link]](https://universityofadelaide.box.com/s/tsiimvp65tkf7dw1nuh8l71cjcs0fyif)
 - Syntext-150k: 
