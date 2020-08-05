@@ -2,7 +2,7 @@ DATASETS:
   TRAIN: ("case_sensitive_sample_dataset_train",)
   TEST: ("new_sample_dataset_val",)
 MODEL:
-  WEIGHTS: "path_to_finetune_model.pth"
+  WEIGHTS: "trained_models/pretrain/model_final.pth"
   META_ARCHITECTURE: "OneStageRCNN"
   ROI_HEADS:
     NAME: "TextHead"
@@ -36,4 +36,4 @@ INPUT:
     SIZE: [0.1, 0.1]
 TEST:
   EVAL_PERIOD: 1000000
-OUTPUT_DIR: "path_to_save_model"
+OUTPUT_DIR: "trained_models/finetune"
