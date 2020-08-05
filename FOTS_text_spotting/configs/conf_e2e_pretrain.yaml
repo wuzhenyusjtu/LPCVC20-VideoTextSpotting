@@ -37,4 +37,4 @@ INPUT:
     SIZE: [0.1, 0.1]
 TEST:
   EVAL_PERIOD: 2000000
-OUTPUT_DIR: "path_to_save_model"
+OUTPUT_DIR: "trained_models/pretrain"
