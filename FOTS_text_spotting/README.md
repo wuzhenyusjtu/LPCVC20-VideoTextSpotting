@@ -11,12 +11,12 @@ python setup.py build develop
 ```
 
 ## Dataset
-- Sample Dataset [[dataset]]()
-- Totaltext training, testing images, and annotations [[link]](https://universityofadelaide.box.com/shared/static/3eq5ti7z45qfq5gu96gg5t1xwh1yrrt7.zip) [[paper]](https://ieeexplore.ieee.org/abstract/document/8270088/) [[code]](https://github.com/cs-chan/Total-Text-Dataset). 
-- MLT [[dataset]](https://universityofadelaide.box.com/s/tsiimvp65tkf7dw1nuh8l71cjcs0fyif) [[paper]](https://ieeexplore.ieee.org/abstract/document/8270168).
+- Sample Dataset [[link]]()
+- Totaltext training, testing images, and annotations [[link]](https://universityofadelaide.box.com/shared/static/3eq5ti7z45qfq5gu96gg5t1xwh1yrrt7.zip)
+- MLT [[link]](https://universityofadelaide.box.com/s/tsiimvp65tkf7dw1nuh8l71cjcs0fyif)
 - Syntext-150k: 
-  - Part1: 94,723 [[dataset]](https://universityofadelaide.box.com/s/alta996w4fym6arh977h3k3xv55clhg3) 
-  - Part2: 54,327 [[dataset]](https://universityofadelaide.box.com/s/7k7d6nvf951s4i01szs4udpu2yv5dlqe)
+  - Part1: 94,723 [[link]](https://universityofadelaide.box.com/s/alta996w4fym6arh977h3k3xv55clhg3) 
+  - Part2: 54,327 [[link]](https://universityofadelaide.box.com/s/7k7d6nvf951s4i01szs4udpu2yv5dlqe)
 
 ## Quick Start 
 
@@ -25,7 +25,9 @@ python setup.py build develop
 1. Run inference_e2e with the below command
 
 ```
-python inference_e2e.py --config-file configs/conf_e2e_finetune.yaml --opts MODEL.WEIGHTS trained_models/finetune/model_final.pth
+python inference_e2e.py \
+    --config-file configs/conf_e2e_finetune.yaml \
+    --opts MODEL.WEIGHTS trained_models/finetune/model_final.pth
 ```
 
 ### Train Your Own Models
