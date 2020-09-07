@@ -108,6 +108,23 @@ After we got the pruned model, we finetuned the model with Merged Dataset. Prune
 
     ```--prune``` If set, will train pruned model. The pretrain model given should be pruned one. <br>
 
+    
+### Test/Validate model
+
+You can test the model's performance by running test_sample.py file. Only supports sample dataset. More details please check the code.
+
+1. Test original trained model
+
+```sh
+    python3 test_sample.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pretrained/model
+```
+
+2. Test exported pruned model
+
+```sh
+    python3 test_sample.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pruned/model --prune
+```
+
 ### Model Link
 
 [Pretrained original model](https://drive.google.com/file/d/1LTlveonAFBthWphUYNOJDXJE5SCFOhkD/view?usp=sharing), [Pruned pretrained model](https://drive.google.com/file/d/1SFwTCUBmjOrxNpwR8SyGeLeOyEgdLbPu/view?usp=sharing)
@@ -156,19 +173,3 @@ python3 quantize_model.py --calibrate-folder /path/to/calibrate/dir --pretrain-m
 --backends fbgemm --save-dir /path/to/save/dir
 ```
 
-    
-### Test/Validate model
-
-You can test the model's performance by running test_sample.py file. Only supports sample dataset. More details please check the code.
-
-1. Test original trained model
-
-```sh
-    python3 test_sample.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pretrained/model
-```
-
-2. Test exported pruned model
-
-```sh
-    python3 test_sample.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pruned/model --prune
-```
