@@ -156,21 +156,19 @@ python3 quantize_model.py --calibrate-folder /path/to/calibrate/dir --pretrain-m
 --backends fbgemm --save-dir /path/to/save/dir
 ```
 
-## Test
+    
+### Test/Validate model
+
+You can test the model's performance by running test_sample.py file. Only supports sample dataset. More details please check the code.
+
+1. Test original trained model
+
 ```sh
-python3 test.py --images-folder ch4_test_images/ --output-folder res/ --checkpoint epoch_582_checkpoint.pt && zip -jmq runs/u.zip res/* && python2 script.py -g=gt.zip -s=runs/u.zip
+    python3 test_sample.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pretrained/model
 ```
-`ch4_training_images` and `ch4_training_localization_transcription_gt` are available in [Task 4.4: End to End (2015 edition)](http://rrc.cvc.uab.es/?ch=4&com=downloads). `script.py` and `ch4_test_images` can be found in [My Methods](https://rrc.cvc.uab.es/?ch=4&com=mymethods&task=1) (`Script: IoU` and `test set samples`).
 
-It gives `Calculated!{"precision": 0.8694968553459119, "recall": 0.7987481945113144, "hmean": 0.8326223337515684, "AP": 0}`.
+2. Test exported pruned model
 
-The pretrained models are here: https://drive.google.com/open?id=1xaVshLRrMEkb9LA46IJAZhlapQr3vyY2
-
-[`test.py`](./test.py) has a commented code to visualize results.
-
-## Difference with the paper
-1. The model is different compared to what the paper describes. An explanation is in [`model.py`](./model.py).
-2. The authors of FOTS could not train on clipped words because they also have a recognition branch. The whole word is required to be present on an image to be able to be recognized correctly. This reimplementation has only detection branch and that allows to train on crops of the words.
-3. The paper suggest using some other data sets in addition. Training on SynthText is simplified in this reimplementation.
-=======
-# lpcv_fots
+```sh
+    python3 test_sample.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pruned/model --prune
+```
