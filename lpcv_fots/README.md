@@ -5,12 +5,12 @@ Note: Original code borrow from https://github.com/Wovchena/text-detection-fots.
 ## LPCV Fots Detection Part Pipeline
 
 We did the following steps in our work:
-1. Train Fots detection model from scratch with Merged Dataset. [standard](./standard)
-2. Prune Fots model with [NNI](https://github.com/microsoft/nni)
-3. Prune out channels with zero-weight and get pruned model
-4. Finetune pruned model with Merged Dataset
-5. Add rejector to Fts model, freeze other parts and only train rejector
-5. Quantize Fots model with pytorch quantization package
+1. Train Fots detection model from scratch with Merged Dataset. Check [standard](./standard)
+2. Prune Fots model with [NNI](https://github.com/microsoft/nni). Check [prune](./prune)
+3. Prune out channels with zero-weight and get pruned model. Check [prune](./prune)
+4. Finetune pruned model with Merged Dataset. Check [standard](./standard)
+5. Add rejector to Fts model, freeze other parts and only train rejector. Check [rejector](./rejector)
+5. Quantize Fots model with pytorch quantization package. Check [quantize](./quantize)
 
 ## Train for LPCV
 ### Dataset
