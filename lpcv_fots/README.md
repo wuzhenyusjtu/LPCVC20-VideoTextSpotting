@@ -2,41 +2,10 @@
 
 Note: Original code borrow from https://github.com/Wovchena/text-detection-fots.pytorch
 
-## Train
-1. Train with SynthText for 9 epochs
-    ```sh
-    time python3 train.py --train-folder SynthText/ --batch-size 21 --batches-before-train 2
-    ```
-    At this point the result was `Epoch 8: 100%|█████████████| 390/390 [08:28<00:00,  1.00it/s, Mean loss=0.98050]`.
-2. Train with ICDAR15
-
-    Replace a data set in `data_set = datasets.SynthText(args.train_folder, datasets.transform)` with `datasets.ICDAR2015` in [`train.py`](./train.py) and run
-    ```sh
-    time python3 train.py --train-folder icdar15/ --continue-training --batch-size 21 --batches-before-train 2
-    ```
-    It is expected that the provided `--train-folder` contains unzipped `ch4_training_images` and `ch4_training_localization_transcription_gt`. To avoid saving model at each epoch, the line `if True:` in [`train.py`](./train.py) can be replaced with `if epoch > 60 and epoch % 6 == 0:`
-
-    The result was `Epoch 582: 100%|█████████████| 48/48 [01:05<00:00,  1.04s/it, Mean loss=0.11290]`.
-    
-### Learning rate schedule:
-Epoch   175: reducing learning rate of group 0 to 5.0000e-04.
-
-Epoch   264: reducing learning rate of group 0 to 2.5000e-04.
-
-Epoch   347: reducing learning rate of group 0 to 1.2500e-04.
-
-Epoch   412: reducing learning rate of group 0 to 6.2500e-05.
-
-Epoch   469: reducing learning rate of group 0 to 3.1250e-05.
-
-Epoch   525: reducing learning rate of group 0 to 1.5625e-05.
-
-Epoch   581: reducing learning rate of group 0 to 7.8125e-06.
-
 ## LPCV Fots Detection Part Pipeline
 
 We did the following steps in our work:
-1. Train Fots detection model from scratch with Merged Dataset
+1. Train Fots detection model from scratch with Merged Dataset. [standard](/standard)
 2. Prune Fots model with [NNI](https://github.com/microsoft/nni)
 3. Prune out channels with zero-weight and get pruned model
 4. Finetune pruned model with Merged Dataset
