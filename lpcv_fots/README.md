@@ -5,7 +5,7 @@ Note: Original code borrow from https://github.com/Wovchena/text-detection-fots.
 ## LPCV Fots Detection Part Pipeline
 
 We did the following steps in our work:
-1. Train Fots detection model from scratch with Merged Dataset. [standard](/standard)
+1. Train Fots detection model from scratch with Merged Dataset. [standard](./standard)
 2. Prune Fots model with [NNI](https://github.com/microsoft/nni)
 3. Prune out channels with zero-weight and get pruned model
 4. Finetune pruned model with Merged Dataset
