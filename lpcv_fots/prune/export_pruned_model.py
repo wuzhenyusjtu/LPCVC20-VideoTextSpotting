@@ -1,8 +1,10 @@
-
 # Functions for mask pruned model
+import sys 
+sys.path.append("..") 
+
 import torch
-from train_sample import load_multi
-from model import FOTSModel
+from utils.train_utils import load_multi
+from standard.model import FOTSModel
 import argparse
 
 import cv2

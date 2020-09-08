@@ -1,4 +1,7 @@
-from model import FOTSModel
+import sys 
+sys.path.append("..") 
+
+from standard.model import FOTSModel
 from modules.parse_polys import parse_polys
 import argparse
 import math
@@ -11,10 +14,10 @@ import torch
 import torch.utils.data
 import tqdm
 
-import datasets
+import standard.datasets as datasets
 from nni.compression.torch import L1FilterPruner
 import time
-from train_sample import detection_loss, load_multi
+from utils.train_utils import detection_loss, load_multi
 
 def train(model, loss_func, opt, lr_scheduler, max_batches_per_iter_cnt, train_dl, valid_dl):
     model.train()

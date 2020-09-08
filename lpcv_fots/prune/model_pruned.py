@@ -1,5 +1,3 @@
-# l1 0.5 pruner
-# Quantize l1 0.5 fots model
 import numpy as np
 import torch
 import torch.nn as nn
@@ -22,6 +20,11 @@ model_urls = {
     'resnet34':'https://downloads.pytorch.org/models/resnet34-333f7ec4.pth'
 }
 # model_path = '../resnet50-19c8e357.pth'
+
+import sys 
+sys.path.append("..") 
+
+from standard.model import conv, Decoder
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     # 3x3 convolution with padding
@@ -85,6 +88,10 @@ class _ResNet(nn.Module):
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
         
+        # Original code
+        #self.inplanes = 64
+        
+        # Set new inplaces as 32
         self.inplanes = 32
         self.dilation = 1
         if replace_stride_with_dilation is None:
@@ -97,11 +104,20 @@ class _ResNet(nn.Module):
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=False)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        
+        # Original code
+        #self.layer1 = self._make_layer(block, 64, layers[0])
+        #self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
+        #self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
+        #self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
+        
+        # Set layers with new channels
         self.layer1 = self._make_layer(block, 32, layers[0])
         self.layer2 = self._make_layer(block, 64, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
         self.layer3 = self._make_layer(block, 128, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
         self.layer4 = self._make_layer(block, 256, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1,1))
+        
         self.fc = nn.Linear(512 * block.expansion, num_classes)
         
         for m in self.modules():
@@ -160,124 +176,20 @@ class _ResNet(nn.Module):
     def forward(self, x):
         return self._forward_impl(x)
 
-def _replace_relu(module):
-    reassign = {}
-    for name, mod in module.named_children():
-        _replace_relu(mod)
-        if type(mod) == nn.ReLU or type(mod) == nn.ReLU6:
-            reassign[name] = nn.ReLU(inplace=False)
-    for key, value in reassign.items():
-        module._modules[key] = value 
-        
-def quantize_model(model, backend):
-    _dummy_input_data = torch.rand(1, 3, 224, 224)
-    if backend not in torch.backends.quantized.supported_engines:
-        raise RuntimeErrir("Quantized backend not supported")
-    torch.backends.quantized.engine = backend
-    model.eval()
-    
-    if backend == 'fbgemm':
-        model.qconfig = torch.quantization.QConfig(
-            activation=torch.quantization.default_observer,
-            weight=torch.quantization.default_per_channel_weight_observer)
-    elif backend == 'qnnpack':
-        model.qconfig = torch.quantization.QConfig(
-            activation=torch.quantization.default_observer,
-            weight=torch.quantization.default_weight_observer)
-    model.fuse_model()
-    torch.quantization.prepare(model, inplace=True)
-    torch.quantization.convert(model, inplace=True)
-    
-    return 
-class QuantizableBasicBlock(BasicBlock):
-    def __init__(self, *args, **kwargs):
-        super(QuantizableBasicBlock, self).__init__(*args, **kwargs)
-        # Wrapper class to make stateless float operations stateful, can be replaced with quantized versions
-        self.add_relu = torch.nn.quantized.FloatFunctional()
-    def forward(self, x):
-        identity = x
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        if self.downsample is not None:
-            identity = self.downsample(x)
-        
-        out = self.add_relu.add_relu(out, identity)
-        
-        return out
-    def fuse_model(self):
-        torch.quantization.fuse_modules(self, [['conv1', 'bn1', 'relu'], ['conv2', 'bn2']], inplace=True)
-        if self.downsample:
-            torch.quantization.fuse_modules(self.downsample, ['0', '1'], inplace=True)
-
-# class QuantizableResNet(ResNet):
-class ResNet(_ResNet):
-    def __init__(self, *args, **kwargs):
-        super(ResNet, self).__init__(*args, **kwargs)
-        
-        self.quant = torch.quantization.QuantStub()
-        self.dequant = torch.quantization.DeQuantStub()
-    
-    def forward(self, x):
-        x = self.quant(x)
-        x = self._forward_impl(x)
-        x = self.dequant(x)
-        return x
-
-    def fuse_model(self):
-        fuse_modules(self, ['conv1', 'bn1', 'relu'], inplace=True)
-        for m in self.modules():
-            if type(m) == QuantizableBasicBlock:
-                m.fuse_model()
-def qresnet34(pretrained=False, progress=True, quantize=True, **kwargs):
-    return _qresnet('resnet34', QuantizableBasicBlock, [3,4,6,3], pretrained, progress, quantize, **kwargs)
-def _qresnet(arch, block, layers, pretrained, progress, quantize, **kwargs):
-    model = ResNet(block, layers, **kwargs)
-    if pretrained:
-        model.load_state_dict(load_state_dict_from_url('https//downloads.pytorch.org/models/resnet34-333f7ec4.pth',
-                                                       progress=progress))
-        print("Load model successfully")
-    
-    return model    
-
-def conv(in_channels, out_channels, kernel_size=3, padding=1, bn=True, dilation=1, stride=1, relu=True, bias=True):
-    modules = [nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, bias=bias)]
-    if bn:
-        modules.append(nn.BatchNorm2d(out_channels))
-    if relu:
-        modules.append(nn.ReLU(inplace=True))
-    return nn.Sequential(*modules)
-
-
-class Decoder(nn.Module):
-    def __init__(self, in_channels, squeeze_channels):
-        super().__init__()
-        self.squeeze = conv(in_channels, squeeze_channels)
-
-    def forward(self, x, encoder_features):
-        x = self.squeeze(x)
-        x = F.interpolate(x, size=(encoder_features.shape[2], encoder_features.shape[3]),
-                          mode='bilinear', align_corners=True)
-        up = torch.cat([encoder_features, x], 1)
-        return up
-
-
-class FOTSModel_q(nn.Module):
+class FOTSModel_pruned(nn.Module):
     def __init__(self, crop_height=640):
         super().__init__()
         self.crop_height = crop_height
-        self.resnet = qresnet34(pretrained=False)
+        self.resnet = resnet34(pretrained=False)
         self.conv1 = nn.Sequential(
             self.resnet.conv1,
             self.resnet.bn1,
             self.resnet.relu,
-        )  # 64
-        self.encoder1 = self.resnet.layer1  # 64
-        self.encoder2 = self.resnet.layer2  # 128
-        self.encoder3 = self.resnet.layer3  # 256
-        self.encoder4 = self.resnet.layer4  # 512
+        )  # 32
+        self.encoder1 = self.resnet.layer1  # 32
+        self.encoder2 = self.resnet.layer2  # 64
+        self.encoder3 = self.resnet.layer3  # 128
+        self.encoder4 = self.resnet.layer4  # 256
 
         self.center = nn.Sequential(
             conv(256, 256, stride=2),
@@ -289,16 +201,24 @@ class FOTSModel_q(nn.Module):
         self.decoder1 = Decoder(128, 32)
         self.remove_artifacts = conv(64, 64)
 
+        #Original code        
+        #self.center = nn.Sequential(
+            #conv(512, 512, stride=2),
+            #conv(512, 1024)
+        #)
+        #self.decoder4 = Decoder(1024, 512)
+        #self.decoder3 = Decoder(1024, 256)
+        #self.decoder2 = Decoder(512, 128)
+        #self.decoder1 = Decoder(256, 64)
+        #self.remove_artifacts = conv(128, 64)
+
         self.confidence = conv(64, 1, kernel_size=1, padding=0, bn=False, relu=False)
         self.distances = conv(64, 4, kernel_size=1, padding=0, bn=False, relu=False)
         self.angle = conv(64, 1, kernel_size=1, padding=0, bn=False, relu=False)
-        
-        self.quant = torch.quantization.QuantStub()
-        self.dequant = torch.quantization.DeQuantStub()
 
     def forward(self, x):
-        
-        x = self.quant(x)
+#         print("input shape ", x.shape)
+        #x = self.conv1(x)
         x = self.resnet.conv1(x)
         x = self.resnet.bn1(x)
         x = self.resnet.relu(x)
@@ -317,27 +237,10 @@ class FOTSModel_q(nn.Module):
         d1 = self.decoder1(d2, e1)
 
         final = self.remove_artifacts(d1)
-        
+
         confidence = self.confidence(final)
         distances = self.distances(final)
-        distances = self.dequant(distances)
         distances = torch.sigmoid(distances) * self.crop_height
         angle = self.angle(final)
-        angle = self.dequant(angle)
         angle = torch.sigmoid(angle) * np.pi / 2
-        confidence = self.dequant(confidence)
         return confidence, distances, angle
-    
-    def fuse_conv(self, model):
-        torch.quantization.fuse_modules(model, ['0', '1', '2'], inplace=True)
-        
-    def fuse_model(self):
-        self.fuse_conv(self.conv1)
-        self.resnet.fuse_model()
-        for child in self.center.children():
-            self.fuse_conv(child)
-        self.fuse_conv(self.decoder1.squeeze)
-        self.fuse_conv(self.decoder2.squeeze)
-        self.fuse_conv(self.decoder3.squeeze)
-        self.fuse_conv(self.decoder4.squeeze)
-        self.fuse_conv(self.remove_artifacts)

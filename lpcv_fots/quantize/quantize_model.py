@@ -1,4 +1,7 @@
 # Code for l1 0.5 
+import sys 
+sys.path.append("..") 
+
 import argparse
 import math
 
@@ -12,32 +15,36 @@ import torch.utils.data
 import torch.nn.functional as F
 import tqdm
 
-import datasets
-from model import FOTSModel
+import standard.datasets as datasets
+from standard.model import FOTSModel
 from modules.parse_polys import parse_polys
 
 from collections import OrderedDict
 from model_q import qresnet34
-from train_sample import load_multi
+from utils.train_utils import load_multi
 
-def conv(in_channels, out_channels, kernel_size=3, padding=1, bn=True, dilation=1, stride=1, relu=True, bias=True):
-    modules = [nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, bias=bias)]
-    if bn:
-        modules.append(nn.BatchNorm2d(out_channels))
-    if relu:
-        modules.append(nn.ReLU(inplace=False))
-    return nn.Sequential(*modules)
+import sys 
+sys.path.append("..") 
+from standard.model import conv, Decoder
 
-class Decoder(nn.Module):
-    def __init__(self, in_channels, squeeze_channels):
-        super().__init__()
-        self.squeeze = conv(in_channels, squeeze_channels)
-        self.add_relu = torch.nn.quantized.FloatFunctional()
-    def forward(self, x, encoder_features):
-        x = self.squeeze(x)
-        x = F.interpolate(x, size=(encoder_features.shape[2], encoder_features.shape[3]), mode='bilinear', align_corners=True)
-        up = self.add_relu.cat([encoder_features, x], 1)
-        return up
+# def conv(in_channels, out_channels, kernel_size=3, padding=1, bn=True, dilation=1, stride=1, relu=True, bias=True):
+#     modules = [nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, bias=bias)]
+#     if bn:
+#         modules.append(nn.BatchNorm2d(out_channels))
+#     if relu:
+#         modules.append(nn.ReLU(inplace=False))
+#     return nn.Sequential(*modules)
+
+# class Decoder(nn.Module):
+#     def __init__(self, in_channels, squeeze_channels):
+#         super().__init__()
+#         self.squeeze = conv(in_channels, squeeze_channels)
+#         self.add_relu = torch.nn.quantized.FloatFunctional()
+#     def forward(self, x, encoder_features):
+#         x = self.squeeze(x)
+#         x = F.interpolate(x, size=(encoder_features.shape[2], encoder_features.shape[3]), mode='bilinear', align_corners=True)
+#         up = self.add_relu.cat([encoder_features, x], 1)
+#         return up
 
 # class Center(nn.Module):
 class FOTSModel_q(nn.Module):

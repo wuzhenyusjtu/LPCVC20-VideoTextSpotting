@@ -1,3 +1,6 @@
+import sys 
+sys.path.append("..") 
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -5,8 +8,8 @@ import torch.nn.functional as F
 import torchvision
 import argparse
 
-from model_q import FOTSModel_q
-from train_sample import load_multi
+from quantize.model_q import FOTSModel_q
+from utils.train_utils import load_multi
 
 import os
 import cv2

@@ -41,8 +41,11 @@ def transform(im, quads, texts, normalizer, data_set, AUG=True, RESHAPE_SIZE=290
     assert STRETCH >= 0 and STRETCH < 1, 'STRETCH should be in range (0, 1)'
     assert RESHAPE_SIZE * (1-STRETCH) >= IN_SIDE, 'STRETCH parameter too large, try with a smaller one'
     assert ANGLE <= 45 and ANGLE >= 0, 'ANGLE should be in range (0, 45)'
+    
     if AUG:
         assert RESHAPE_SIZE >= IN_SIDE + 10, 'RESHAPE_SIZE should be larger if AUG set to True'
+    else:
+        assert ANGLE == 0 and STRETCH == 0, 'ANGLE and STRETCH parameters should be 0 if AUG set to False'
     
     # resize image
     scale = RESHAPE_SIZE / np.minimum(im.shape[0], im.shape[1])
