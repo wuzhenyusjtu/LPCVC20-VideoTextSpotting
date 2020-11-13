@@ -27,7 +27,7 @@ Dependence
 * [warp_ctc_pytorch](https://github.com/SeanNaren/warp-ctc/tree/pytorch_bindings/pytorch_binding)
 * lmdb
 
-Train a model from with trained model loaded for LPCV
+Get MJDataset training/testing json file
 -----------------
 First we create json files for training and testing. ```get_data_json.py``` aims at generating the train json file and test json file. We need to pass the path to [MJ Dataset](https://www.robots.ox.ac.uk/~vgg/data/text/) and set the number of training and testing data. Run ```get_data_json.py``` as follows:
 ```sh
