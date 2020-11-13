@@ -121,7 +121,7 @@ crnn.apply(weights_init)
 if opt.pretrained != '':
     print('loading pretrained model from %s' % opt.pretrained)
 #     crnn.load_state_dict(load_multi(opt.pretrained), strict=True)
-    crnn.load_state_dict(torch.load(opt.pretrained), strict=False)
+    crnn.load_state_dict(torch.load(opt.pretrained), strict=True)
 # print(crnn)
 
 
