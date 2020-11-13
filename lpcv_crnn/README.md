@@ -38,6 +38,15 @@ For example, we can run it as:
 python3 get_data_json.py --datadir ../mnt/ramdisk/max/90kDICT32px --train_num 3000000 --test_num 30000
 ```
 Then we can find two json files in the same path of the dataset.
+Train a model from scratch
+-----------------
+Command:
+```sh
+python3 train_mj.py --adadelta --trainRoot /share/group_jiliu/yunhexue/MJData/train_new.json  \
+--valRoot /share/group_jiliu/yunhexue/MJData/test_new.json --cuda --expr_dir path/to/saved/dir
+```
+The two paths are the path to the two json files mentioned above. ```expr_dir``` parameter is the path to the saved models. </br>
+```adadelta``` is suggested. More parameters can be found in ```train_mj.py```. 
 
 Train a model from with trained model loaded for LPCV
 -----------------
