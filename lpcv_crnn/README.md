@@ -43,7 +43,8 @@ Train a model from scratch
 -----------------
 Command:
 ```sh
-python3 train_mj.py --adadelta --trainRoot  /path/to/train/json/file --valRoot /path/to/test/json/file --cuda --expr_dir /path/to/saved/dir
+python3 train_mj.py --adadelta --trainRoot  /path/to/train/json/file --valRoot /path/to/test/json/file --cuda 
+--expr_dir /path/to/saved/dir
 ```
 Use MJDataset to get the pretrained model. The two paths are the path to the two json files mentioned above. ```expr_dir``` parameter is the path to the saved models. </br>
 ```adadelta``` is suggested. More parameters can be found in ```train_mj.py```. 
@@ -56,8 +57,6 @@ python3 train_mj.py --ft --adadelta --trainRoot /path/to/training/sample/crnn/da
 --cuda --expr_dir /path/to/saved/dir --pretrained /path/to/pretrained/model
 ```
 We add the ```--ft``` parameter here to finetune the pretrained model. The dataset contains images with labels as their names. The dataset can be found in ```/data/yunhe/sample_bezier_all``` on 64.38.150.214 server. More details can check ```dataset.py``` and ```train_mj.py```. 
-
-
 
 Prune model 
 -----------------
