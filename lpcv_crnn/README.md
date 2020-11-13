@@ -43,21 +43,22 @@ Train a model from scratch
 -----------------
 Command:
 ```sh
-python3 train_mj.py --adadelta --trainRoot /share/group_jiliu/yunhexue/MJData/train_new.json  \
---valRoot /share/group_jiliu/yunhexue/MJData/test_new.json --cuda --expr_dir path/to/saved/dir
+python3 train_mj.py --adadelta --trainRoot  /path/to/train/json/file \
+--valRoot /path/to/test/json/file --cuda --expr_dir /path/to/saved/dir
 ```
-Use MJDataset to get the pretrained moedl. The two paths are the path to the two json files mentioned above. ```expr_dir``` parameter is the path to the saved models. </br>
+Use MJDataset to get the pretrained model. The two paths are the path to the two json files mentioned above. ```expr_dir``` parameter is the path to the saved models. </br>
 ```adadelta``` is suggested. More parameters can be found in ```train_mj.py```. 
 
-Train the pretrained model with sample dataset
+Finetune the pretrained model with sample dataset
 -----------------
 Command:
 ```sh
-python3 train_mj.py --adadelta --trainRoot /share/group_jiliu/yunhexue/MJData/train_new.json  \
---valRoot /share/group_jiliu/yunhexue/MJData/test_new.json --cuda --pretrained ./data/crnn.pth
+python3 train_mj.py --ft --adadelta --trainRoot /path/to/training/sample/crnn/dataset \
+--valRoot /path/to/test/sample/crnn/dataset --cuda --expr_dir /path/to/saved/dir
 ```
-Note:
-The training and test dataset are all part of the original dataset. We did not get the pretrained model by training from scratch. We used the model the original repo provided and finetuned it using our own dataset. Here the training and test dataset are all pretrained dataset. We store training and test images paths in .json file. And the model in ```/data``` is also the one given by the original repo. More information can be found in ```dataset.py```
+We add the ```--ft``` parameter here to finetune the pretrained model. The dataset contains images with labels as their names. The dataset can be found in ```/data/yunhe/sample_bezier_all``` on 64.38.150.214 server. More details can check ```dataset.py``` and ```train_mj.py```. 
+
+
 
 Prune model 
 -----------------
