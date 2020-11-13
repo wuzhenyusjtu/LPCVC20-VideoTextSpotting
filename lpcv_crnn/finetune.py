@@ -17,23 +17,25 @@ import dataset
 import models.crnn as crnn
 import copy
 
+from crnn_prune import CRNN as CRNN_p
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--trainRoot', required=True, help='path to dataset')
 parser.add_argument('--valRoot', required=True, help='path to dataset')
 parser.add_argument('--workers', type=int, help='number of data loading workers', default=8)
-parser.add_argument('--batchSize', type=int, default=128, help='input batch size')
+parser.add_argument('--batchSize', type=int, default=256, help='input batch size')
 parser.add_argument('--imgH', type=int, default=32, help='the height of the input image to network')
 parser.add_argument('--imgW', type=int, default=100, help='the width of the input image to network')
 parser.add_argument('--nh', type=int, default=256, help='size of the lstm hidden state')
-parser.add_argument('--nepoch', type=int, default=7, help='number of epochs to train for')
+parser.add_argument('--nepoch', type=int, default=4, help='number of epochs to train for')
 # TODO(meijieru): epoch -> iter
 parser.add_argument('--cuda', action='store_true', help='enables cuda')
 parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
 parser.add_argument('--pretrained', default='', help="path to pretrained model (to continue training)")
 parser.add_argument('--alphabet', type=str, default='0123456789abcdefghijklmnopqrstuvwxyz')
-parser.add_argument('--expr_dir', default='expr4_ft_mj_2', help='Where to store samples and models')
+parser.add_argument('--expr_dir', default='/data/yunhe/nni_crnn_finetune_pruned_l1_multi3_sample_all_15', help='Where to store samples and models')
 parser.add_argument('--displayInterval', type=int, default=50, help='Interval to be displayed')
-parser.add_argument('--n_test_disp', type=int, default=10, help='Number of samples to display when test')
+parser.add_argument('--n_test_disp', type=int, default=50, help='Number of samples to display when test')
 parser.add_argument('--valInterval', type=int, default=100, help='Interval to be displayed')
 parser.add_argument('--saveInterval', type=int, default=100, help='Interval to be displayed')
 parser.add_argument('--lr', type=float, default=0.01, help='learning rate for Critic, not used by adadealta')
@@ -46,7 +48,7 @@ parser.add_argument('--random_sample', action='store_true', help='whether to sam
 opt = parser.parse_args()
 print(opt)
 
-opt.alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&\'()*+,-.:;<=>?@[]\\^_{}|~'
+# opt.alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&\'()*+,-.:;<=>?@[]\\^_{}|~'
 
 if not os.path.exists(opt.expr_dir):
     os.makedirs(opt.expr_dir)
@@ -88,7 +90,7 @@ test_dataset = dataset.SampleDataset(root=opt.valRoot, transform=transformer)
 nclass = len(opt.alphabet) + 1
 nc = 1
 
-converter = utils.strLabelConverter(opt.alphabet, ignore_case=False)
+converter = utils.strLabelConverter(opt.alphabet, ignore_case=True)
 criterion = CTCLoss()
 
 
@@ -109,7 +111,8 @@ def load_multi(model_path):
         new_state_dict[name] = v
     return new_state_dict
 
-crnn = crnn.CRNN(opt.imgH, nc, nclass, opt.nh)
+# crnn = crnn.CRNN(opt.imgH, nc, nclass, opt.nh)
+crnn = CRNN_p(opt.imgH, nc, nclass, opt.nh)
 # crnn = crnn.CRNN(opt.imgH, nc, 35, opt.nh)
 crnn.apply(weights_init)
 # for idx, m in enumerate(crnn.rnn.children()):
@@ -117,8 +120,8 @@ crnn.apply(weights_init)
 #         m = crnn
 if opt.pretrained != '':
     print('loading pretrained model from %s' % opt.pretrained)
-    crnn.load_state_dict(load_multi(opt.pretrained), strict=True)
-#     crnn.load_state_dict(torch.load(opt.pretrained), strict=False)
+#     crnn.load_state_dict(load_multi(opt.pretrained), strict=True)
+    crnn.load_state_dict(torch.load(opt.pretrained), strict=False)
 # print(crnn)
 
 
