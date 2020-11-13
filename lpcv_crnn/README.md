@@ -6,6 +6,8 @@ Origin software could be found in [crnn](https://github.com/bgshih/crnn)
 
 Run demo
 --------
+This part is from original CRNN repo.
+
 A demo program can be found in ``demo.py``. Before running the demo, download a pretrained model
 from [Baidu Netdisk](https://pan.baidu.com/s/1pLbeCND) or [Dropbox](https://www.dropbox.com/s/dboqjk20qjkpta3/crnn.pth?dl=0). 
 This pretrained model is converted from auther offered one by ``tool``.
@@ -49,15 +51,6 @@ python3 train.py --adadelta --trainRoot  /path/to/train/json/file --valRoot /pat
 Use MJDataset to get the pretrained model. The two paths are the path to the two json files mentioned above. ```expr_dir``` parameter is the path to the saved models. </br>
 ```adadelta``` is suggested. More parameters can be found in ```train_mj.py```. 
 
-Finetune the pretrained model with sample dataset
------------------
-Command:
-```sh
-python3 train.py --ft --adadelta --trainRoot /path/to/training/sample/crnn/dataset --valRoot /path/to/test/sample/crnn/dataset 
---cuda --expr_dir /path/to/saved/dir --pretrained /path/to/pretrained/model
-```
-We add the ```--ft``` parameter here to finetune the pretrained model. The dataset contains images with labels as their names. The dataset can be found in ```/data/yunhe/sample_bezier_all``` on 64.38.150.214 server. More details can check ```dataset.py``` and ```train_mj.py```. 
-
 Prune model 
 -----------------
 Load pretrained model, prune it with [NNI](https://github.com/microsoft/nni) and finetune the pruned model. Run the command:
@@ -77,12 +70,21 @@ python3 export_prune_mode.py  --pretrained /path/to/pruned/model --expr_dir /pat
 ```
 Then you have a pruned model with lighter architecture at the target directory.
 
+Finetune the pretrained model with sample dataset
+-----------------
+After we export the pruned model, we need to finetune our model with sample dataset.
+Command:
+```sh
+python3 finetune.py --adadelta --trainRoot /path/to/training/sample/crnn/dataset --valRoot /path/to/test/sample/crnn/dataset   
+--cuda --expr_dir /path/to/saved/dir --pretrained /path/to/exported/model
+```
+The dataset contains images with labels as their names. The dataset can be found in ```/data/yunhe/sample_bezier_all``` on 64.38.150.214 server. More details can check ```dataset.py``` and ```finetune.py```. 
+
 Quantize pruned model
 -----------------
 
-Please check ```quantize_model.py``` for detailed information.
-
-Train a new model 
------------------
-1. Construct dataset following [origin guide](https://github.com/bgshih/crnn#train-a-new-model). If you want to train with variable length images (keep the origin ratio for example), please modify the `tool/create_dataset.py` and sort the image according to the text length.
-2. Execute ``python train.py --adadelta --trainRoot {train_path} --valRoot {val_path} --cuda``. Explore ``train.py`` for details.
+Command:
+```sh
+python3 quantize_model.py --pruned /path/to/exported/model --expr_dir /path/to/saved/dir --qconfig qnnpack
+```
+```--qconfig``` parameter sets the configure of quantization. It should be either ```qnnpack``` or ```fbgemm```. Please check ```quantize_model.py``` for detailed information.
