@@ -46,10 +46,10 @@ Command:
 python3 train_mj.py --adadelta --trainRoot /share/group_jiliu/yunhexue/MJData/train_new.json  \
 --valRoot /share/group_jiliu/yunhexue/MJData/test_new.json --cuda --expr_dir path/to/saved/dir
 ```
-The two paths are the path to the two json files mentioned above. ```expr_dir``` parameter is the path to the saved models. </br>
+Use MJDataset to get the pretrained moedl. The two paths are the path to the two json files mentioned above. ```expr_dir``` parameter is the path to the saved models. </br>
 ```adadelta``` is suggested. More parameters can be found in ```train_mj.py```. 
 
-Train a model from with trained model loaded for LPCV
+Train the pretrained model with sample dataset
 -----------------
 Command:
 ```sh
