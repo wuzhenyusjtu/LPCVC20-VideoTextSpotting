@@ -17,25 +17,40 @@ import dataset
 import models.crnn as crnn
 import copy
 
+from crnn_prune import CRNN as CRNN_p
+import logging
+import warnings
+warnings.filterwarnings("ignore")
+
+''' 
+# Parse the arguments
+# Some useful parameters:
+# batchSize: Set the size of batch
+# expr_dir: Set saved directory path
+# valInterval: Set how many intervals after we do evaluation
+# saveInterval: Set how many intervals after we save the model
+'''
 parser = argparse.ArgumentParser()
 parser.add_argument('--trainRoot', required=True, help='path to dataset')
 parser.add_argument('--valRoot', required=True, help='path to dataset')
+# Set pretrain or finetune
+parser.add_argument('--ft', action='store_true', help='set finetune as true means use sample dataset to finetune the model')
 parser.add_argument('--workers', type=int, help='number of data loading workers', default=8)
-parser.add_argument('--batchSize', type=int, default=64, help='input batch size')
+parser.add_argument('--batchSize', type=int, default=1024, help='input batch size')
 parser.add_argument('--imgH', type=int, default=32, help='the height of the input image to network')
 parser.add_argument('--imgW', type=int, default=100, help='the width of the input image to network')
 parser.add_argument('--nh', type=int, default=256, help='size of the lstm hidden state')
-parser.add_argument('--nepoch', type=int, default=5, help='number of epochs to train for')
+parser.add_argument('--nepoch', type=int, default=25, help='number of epochs to train for')
 # TODO(meijieru): epoch -> iter
 parser.add_argument('--cuda', action='store_true', help='enables cuda')
 parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
 parser.add_argument('--pretrained', default='', help="path to pretrained model (to continue training)")
 parser.add_argument('--alphabet', type=str, default='0123456789abcdefghijklmnopqrstuvwxyz')
-parser.add_argument('--expr_dir', default='saved_models', help='Where to store samples and models')
-parser.add_argument('--displayInterval', type=int, default=200, help='Interval to be displayed')
+parser.add_argument('--expr_dir', default='/data/yunhe/nni_crnn_finetune_pruned_l1_multi3_15', help='Where to store samples and models')
+parser.add_argument('--displayInterval', type=int, default=100, help='Interval to be displayed')
 parser.add_argument('--n_test_disp', type=int, default=10, help='Number of samples to display when test')
-parser.add_argument('--valInterval', type=int, default=500, help='Interval to be displayed')
-parser.add_argument('--saveInterval', type=int, default=500, help='Interval to be displayed')
+parser.add_argument('--valInterval', type=int, default=400, help='Interval to be displayed')
+parser.add_argument('--saveInterval', type=int, default=400, help='Interval to be displayed')
 parser.add_argument('--lr', type=float, default=0.01, help='learning rate for Critic, not used by adadealta')
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. default=0.5')
 parser.add_argument('--adam', action='store_true', help='Whether to use adam (default is rmsprop)')
@@ -48,52 +63,71 @@ opt = parser.parse_args()
 # opt.alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&\'()*+,-.:;<=>?@[]\\^_{}|~'
 print(opt)
 
-
-
 if not os.path.exists(opt.expr_dir):
     os.makedirs(opt.expr_dir)
 
-# random.seed(opt.manualSeed)
-# np.random.seed(opt.manualSeed)
-# torch.manual_seed(opt.manualSeed)
+random.seed(opt.manualSeed)
+np.random.seed(opt.manualSeed)
+torch.manual_seed(opt.manualSeed)
 
 cudnn.benchmark = True
 
 if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
-transformer = dataset.resizeNormalize((100, 32))    
+transformer = dataset.resizeNormalize((100, 32))
 
-# train_dataset = dataset.lmdbDataset(root=opt.trainroot)
-# train_dataset = dataset.SampleDataset(root=opt.trainRoot, transform=transformer)
-# train_dataset = dataset.SampleDataset(root=opt.trainRoot)
-train_dataset = dataset.MJDataset(jsonpath=opt.trainRoot)
-assert train_dataset
+'''
+# If opt.ft set as true, then we use images generated from our sample dataset to finetune the pretrained model.
+# Else we use MJDataset to train the model from scratch.
+'''
+if opt.ft:
+    train_dataset = dataset.SampleDataset(root=opt.trainRoot)
+    test_dataset = dataset.SampleDataset(root=opt.valRoot, transform=transformer)
+    # Some paramters suggestions when finetuning:
+    opt.nepoch = 5
+    opt.batchSize = 256
+    opt.valInterval = 100
+    opt.saveInterval = 100
+else:
+    train_dataset = dataset.MJDataset(jsonpath=opt.trainRoot)
+    test_dataset = dataset.MJDataset(jsonpath=opt.valRoot, transform=transformer)
+
+    assert train_dataset
+    
 if not opt.random_sample:
     sampler = dataset.randomSequentialSampler(train_dataset, opt.batchSize)
 else:
     sampler = None
+    
 train_loader = torch.utils.data.DataLoader(
     train_dataset, batch_size=opt.batchSize,
     shuffle=True, num_workers=int(opt.workers),
     collate_fn=dataset.alignCollate(imgH=opt.imgH, imgW=opt.imgW, keep_ratio=opt.keep_ratio))
-test_dataset = dataset.MJDataset(jsonpath=opt.valRoot, transform=transformer)
-# test_dataset = dataset.SampleDataset(root=opt.valRoot, transform=transformer)
-# train_loader = torch.utils.data.DataLoader(
-#     train_dataset, batch_size=opt.batchSize,
-#     shuffle=True, sampler=sampler,
-#     num_workers=int(opt.workers),
-#     collate_fn=dataset.alignCollate(imgH=opt.imgH, imgW=opt.imgW, keep_ratio=opt.keep_ratio))
-# test_dataset = dataset.lmdbDataset(
-#     root=opt.valroot, transform=dataset.resizeNormalize((100, 32)))
 
 nclass = len(opt.alphabet) + 1
 nc = 1
 
-# converter = utils.strLabelConverter(opt.alphabet, ignore_case=False)
 converter = utils.strLabelConverter(opt.alphabet)
 criterion = CTCLoss()
 
+def get_logger(filename, verbosity=1, name=None):
+    level_dict = {0: logging.DEBUG, 1: logging.INFO, 2: logging.WARNING}
+    formatter = logging.Formatter(
+        "[%(asctime)s][%(filename)s][line:%(lineno)d][%(levelname)s] %(message)s"
+    )
+    logger = logging.getLogger(name)
+    logger.setLevel(level_dict[verbosity])
+
+    fh = logging.FileHandler(filename, "w")
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+
+    sh = logging.StreamHandler()
+    sh.setFormatter(formatter)
+    logger.addHandler(sh)
+
+    return logger
 
 # custom weights initialization called on crnn
 def weights_init(m):
@@ -112,18 +146,15 @@ def load_multi(model_path):
         new_state_dict[name] = v
     return new_state_dict
 
+# crnn = CRNN_p(opt.imgH, nc, nclass, opt.nh)
 crnn = crnn.CRNN(opt.imgH, nc, nclass, opt.nh)
-# crnn = crnn.CRNN(opt.imgH, nc, 35, opt.nh)
 crnn.apply(weights_init)
-# for idx, m in enumerate(crnn.rnn.children()):
-#     if idx == 0:
-#         m = crnn
+
 if opt.pretrained != '':
     print('loading pretrained model from %s' % opt.pretrained)
-#     crnn.load_state_dict(load_multi(opt.pretrained), strict=True)
-    crnn.load_state_dict(torch.load(opt.pretrained))
+    crnn.load_state_dict(load_multi(opt.pretrained), strict=True)
+#     crnn.load_state_dict(torch.load(opt.pretrained), strict=True)
 print(crnn)
-
 
 image = torch.FloatTensor(opt.batchSize, 3, opt.imgH, opt.imgH)
 text = torch.IntTensor(opt.batchSize * 5)
@@ -152,8 +183,9 @@ else:
     optimizer = optim.RMSprop(crnn.parameters(), lr=opt.lr)
 
 
-def val(net, dataset, criterion, max_iter=100):
-    print('Start val')
+def val(net, dataset, criterion, logger=None, max_iter=100):
+#     print('Start val')
+    logger.info('Start val')
 
     for p in crnn.parameters():
         p.requires_grad = False
@@ -195,10 +227,14 @@ def val(net, dataset, criterion, max_iter=100):
 
     raw_preds = converter.decode(preds.data, preds_size.data, raw=True)[:opt.n_test_disp]
     for raw_pred, pred, gt in zip(raw_preds, sim_preds, cpu_texts):
-        print('%-20s => %-20s, gt: %-20s' % (raw_pred, pred, gt))
+#         print('%-20s => %-20s, gt: %-20s' % (raw_pred, pred, gt))
+        if logger:
+            logger.info('%-20s => %-20s, gt: %-20s' % (raw_pred, pred, gt))
 
     accuracy = n_correct / float(max_iter * opt.batchSize)
-    print('Test loss: %f, accuray: %f' % (loss_avg.val(), accuracy))
+    if logger:
+        logger.info('Test loss: %f, accuray: %f' % (loss_avg.val(), accuracy))
+#     print('Test loss: %f, accuray: %f' % (loss_avg.val(), accuracy))
 
 
 def trainBatch(net, criterion, optimizer):
@@ -218,11 +254,20 @@ def trainBatch(net, criterion, optimizer):
     optimizer.step()
     return cost
 
+logger = get_logger('{}/exp.log'.format(opt.expr_dir))
+logger.info('start training!')
+logger.info('train dataset length:{}'.format(len(train_dataset)))
+logger.info('test dataset length:{}'.format(len(test_dataset)))
 
 for epoch in range(opt.nepoch):
     train_iter = iter(train_loader)
     i = 0
     print("Start CRNN training.")
+    torch.save(
+                {'model': crnn.state_dict(), 
+                'opt':optimizer.state_dict()}
+               , '{}/netCRNN_{}_{}.pth'.format(opt.expr_dir, epoch, i))
+    logger.info("Model saved to {}/netCRNN_{}_{}.pth".format(opt.expr_dir, epoch, i))
     while i < len(train_loader):
         for p in crnn.parameters():
             p.requires_grad = True
@@ -233,17 +278,21 @@ for epoch in range(opt.nepoch):
         i += 1
 #         print('Epoch {} has loss: {}'.format(i, cost))
         if i % opt.displayInterval == 0:
-            print('[%d/%d][%d/%d] Loss: %f' %
+#             print('[%d/%d][%d/%d] Loss: %f' %
+#                   (epoch, opt.nepoch, i, len(train_loader), loss_avg.val()))
+            logger.info('[%d/%d][%d/%d] Loss: %f' %
                   (epoch, opt.nepoch, i, len(train_loader), loss_avg.val()))
             loss_avg.reset()
 
         if i % opt.valInterval == 0:
-            val(crnn, test_dataset, criterion)
+#             val(crnn, test_dataset, criterion)
+            val(crnn, test_dataset, criterion, logger=logger)
 
         # do checkpointing
         if i % opt.saveInterval == 0:
             print("Model saved")
             torch.save(
-                crnn.state_dict(), '{0}/netCRNN_{1}_{2}.pth'.format(opt.expr_dir, epoch, i))
-    print("Model saved")
-    torch.save(crnn.state_dict(), '{0}/netCRNN_{1}.pth'.format(opt.expr_dir, epoch))
+                {'model': crnn.state_dict(), 
+                'opt':optimizer.state_dict()}
+               , '{}/netCRNN_{}_{}.pth'.format(opt.expr_dir, epoch, i))
+            logger.info("Model saved to {}/netCRNN_{}_{}.pth".format(opt.expr_dir, epoch, i))
