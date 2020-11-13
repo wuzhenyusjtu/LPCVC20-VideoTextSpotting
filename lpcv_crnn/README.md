@@ -29,6 +29,18 @@ Dependence
 
 Train a model from with trained model loaded for LPCV
 -----------------
+First we create json files for training and testing. get_data_json.py aims at generating the train json file and test json file. We need to pass the path to MJ Dataset and set the number of training and testing data. Run get_data_json.py as follows:
+```sh
+python3 get_data_json.py --datadir path/to/mj/dataset --train_num number_for_training --test_num number_for_testing
+```
+For example, we can run it as:
+```sh
+python3 get_data_json.py --datadir ../mnt/ramdisk/max/90kDICT32px --train_num 3000000 --test_num 30000
+```
+Then we can find two files in the same path of the dataset.
+
+Train a model from with trained model loaded for LPCV
+-----------------
 Command:
 ```sh
 python3 train_mj.py --adadelta --trainRoot /share/group_jiliu/yunhexue/MJData/train_new.json  \
