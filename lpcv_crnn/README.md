@@ -75,7 +75,7 @@ Export the pruned model by running command: (More information please check expor
 ```sh
 python3 export_prune_mode.py  --pretrained /path/to/pruned/model --expr_dir /path/to/save/dir
 ```
-Then you have a pruned model with
+Then you have a pruned model with lighter architecture.
 
 Quantize pruned model
 -----------------
