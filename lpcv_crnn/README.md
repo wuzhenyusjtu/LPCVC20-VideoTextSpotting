@@ -65,15 +65,17 @@ Load pretrained model, prune it with [NNI](https://github.com/microsoft/nni) and
 ```sh
 python3 prune_model.py --save-dir /path/to/save/dir --pretrained /path/to/pretrained/model (./data/crnn.pth for example) 
 ```
+Now we have the pruned model with channels set to 0. To get the real pruned model, we need to prune out all zero-channels and export pruned model.
 
 Export pruned model
 -----------------
 
-Export pruned model by running command: (More information please check export_prune_mode.py)
+Export the pruned model by running command: (More information please check export_prune_mode.py)
 
 ```sh
 python3 export_prune_mode.py  --pretrained /path/to/pruned/model --expr_dir /path/to/save/dir
 ```
+Then you have a pruned model with
 
 Quantize pruned model
 -----------------
