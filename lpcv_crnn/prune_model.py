@@ -16,18 +16,21 @@ import dataset
 
 import models.crnn as crnn
 import copy
+import logging
+import warnings
+# warnings.filterwarnings("ignore")
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-f', type=str, default='./', help='path to dataset')
-parser.add_argument('--trainRoot', type=str, default='/data/yunhe/mnt/ramdisk/max/90kDICT32px/train_new.json', help='path to dataset')
-parser.add_argument('--valRoot', type=str, default='/data/yunhe/mnt/ramdisk/max/90kDICT32px/test_new.json', help='path to dataset')
+parser.add_argument('--trainRoot', required=True, help='path to dataset')
+parser.add_argument('--valRoot', required=True, help='path to dataset')
 parser.add_argument('--save-dir', type=str, default='./save_dir', help='path to dataset')
 parser.add_argument('--workers', type=int, help='number of data loading workers', default=8)
-parser.add_argument('--batchSize', type=int, default=256, help='input batch size')
+parser.add_argument('--batchSize', type=int, default=512, help='input batch size')
 parser.add_argument('--imgH', type=int, default=32, help='the height of the input image to network')
 parser.add_argument('--imgW', type=int, default=100, help='the width of the input image to network')
 parser.add_argument('--nh', type=int, default=256, help='size of the lstm hidden state')
-parser.add_argument('--nepoch', type=int, default=5, help='number of epochs to train for')
+parser.add_argument('--nepoch', type=int, default=20, help='number of epochs to train for')
 # TODO(meijieru): epoch -> iter
 parser.add_argument('--cuda', action='store_true', help='enables cuda')
 parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
@@ -36,8 +39,8 @@ parser.add_argument('--alphabet', type=str, default='0123456789abcdefghijklmnopq
 parser.add_argument('--expr_dir', default='nni_models', help='Where to store samples and models')
 parser.add_argument('--displayInterval', type=int, default=100, help='Interval to be displayed')
 parser.add_argument('--n_test_disp', type=int, default=10, help='Number of samples to display when test')
-parser.add_argument('--valInterval', type=int, default=500, help='Interval to be displayed')
-parser.add_argument('--saveInterval', type=int, default=300, help='Interval to be displayed')
+parser.add_argument('--valInterval', type=int, default=100, help='Interval to be displayed')
+parser.add_argument('--saveInterval', type=int, default=100, help='Interval to be displayed')
 parser.add_argument('--lr', type=float, default=0.01, help='learning rate for Critic, not used by adadealta')
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. default=0.5')
 parser.add_argument('--adam', action='store_true', help='Whether to use adam (default is rmsprop)')
@@ -104,6 +107,24 @@ def load_multi(model_path):
         new_state_dict[name] = v
     return new_state_dict
 
+def get_logger(filename, verbosity=1, name=None):
+    level_dict = {0: logging.DEBUG, 1: logging.INFO, 2: logging.WARNING}
+    formatter = logging.Formatter(
+        "[%(asctime)s][%(filename)s][line:%(lineno)d][%(levelname)s] %(message)s"
+    )
+    logger = logging.getLogger(name)
+    logger.setLevel(level_dict[verbosity])
+
+    fh = logging.FileHandler(filename, "w")
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+
+    sh = logging.StreamHandler()
+    sh.setFormatter(formatter)
+    logger.addHandler(sh)
+
+    return logger
+
 crnn = crnn.CRNN(opt.imgH, nc, nclass, opt.nh)
 # crnn = crnn.CRNN(opt.imgH, nc, 35, opt.nh)
 crnn.apply(weights_init)
@@ -112,8 +133,8 @@ crnn.apply(weights_init)
 #         m = crnn
 if opt.pretrained != '':
     print('loading pretrained model from %s' % opt.pretrained)
-#     crnn.load_state_dict(load_multi(opt.pretrained), strict=True)
-    crnn.load_state_dict(torch.load(opt.pretrained), strict=True)
+    crnn.load_state_dict(load_multi(opt.pretrained), strict=True)
+#     crnn.load_state_dict(torch.load(opt.pretrained)['model'], strict=True)
 
 image = torch.FloatTensor(opt.batchSize, 3, opt.imgH, opt.imgH)
 text = torch.IntTensor(opt.batchSize * 5)
@@ -142,11 +163,15 @@ if opt.adam:
 elif opt.adadelta:
     print("Use adadelta")
     optimizer = optim.Adadelta(crnn.parameters())
+#     print("Initial optimizer 1st params:{}".format(optimizer.param_groups[0]['params'][0]))
+#     optimizer.load_state_dict(torch.load(opt.pretrained, map_location='cpu')['opt'])
+#     print("Loaded optimizer 1st params:{}".format(optimizer.param_groups[0]['params'][0]))
 else:
     optimizer = optim.RMSprop(crnn.parameters(), lr=opt.lr)
 
-def val(net, dataset, criterion, max_iter=100):
-    print('Start val')
+def val(net, dataset, criterion, logger=None, max_iter=100):
+#     print('Start val')
+    logger.info('Start val')
 
     for p in crnn.parameters():
         p.requires_grad = False
@@ -188,10 +213,14 @@ def val(net, dataset, criterion, max_iter=100):
 
     raw_preds = converter.decode(preds.data, preds_size.data, raw=True)[:opt.n_test_disp]
     for raw_pred, pred, gt in zip(raw_preds, sim_preds, cpu_texts):
-        print('%-20s => %-20s, gt: %-20s' % (raw_pred, pred, gt))
+#         print('%-20s => %-20s, gt: %-20s' % (raw_pred, pred, gt))
+        if logger:
+            logger.info('%-20s => %-20s, gt: %-20s' % (raw_pred, pred, gt))
 
     accuracy = n_correct / float(max_iter * opt.batchSize)
-    print('Test loss: %f, accuray: %f' % (loss_avg.val(), accuracy))
+    if logger:
+        logger.info('Test loss: %f, accuray: %f' % (loss_avg.val(), accuracy))
+#     print('Test loss: %f, accuray: %f' % (loss_avg.val(), accuracy))
     
 def trainBatch(net, criterion, optimizer, train_iter):
     data = train_iter.next()
@@ -226,15 +255,20 @@ def train(crnn, criterion, optimizer, epoch, opt, callback=None):
         cost = trainBatch(crnn, criterion, optimizer, train_iter)
         loss_avg.add(cost)
         i += 1
-#         print('Epoch {} has loss: {}'.format(i, cost))
         if i % opt.displayInterval == 0:
-            print('[%d/%d][%d/%d] Loss: %f' %
+            logger.info('[%d/%d][%d/%d] Loss: %f' %
                   (epoch, opt.nepoch, i, len(train_loader), loss_avg.val()))
             loss_avg.reset()
 
         if i % opt.valInterval == 0:
-            val(crnn, test_dataset, criterion)
+            val(crnn, test_dataset, criterion, logger=logger)
 
+        # do checkpointing
+        if i % opt.saveInterval == 0:
+            print("Model saved")
+            torch.save(
+                crnn.state_dict(), '{}/netCRNN_{}_{}.pth'.format(opt.expr_dir, epoch, i))
+            logger.info("Model saved to {}/netCRNN_{}_{}.pth".format(opt.expr_dir, epoch, i))
 
 def trainer(model, criterion, optimizer, epoch, callback):
     return train(model, criterion_c, optimizer, epoch, opt, callback)
@@ -242,16 +276,24 @@ def trainer(model, criterion, optimizer, epoch, callback):
 from nni.compression.torch import L1FilterPruner, ADMMPruner
 import time
 
-configure_list = [{'sparsity': 0.5,'op_types': ['Conv2d'],'op_names': ['cnn.conv2']},
-    {'sparsity': 0.7,'op_types': ['Conv2d'],'op_names': ['cnn.conv3', 'cnn.conv4']}, 
-    {'sparsity': 0.85,'op_types': ['Conv2d'],'op_names': ['cnn.conv5', 'cnn.conv6']}]
+configure_list = [{'sparsity': 0.5,'op_types': ['Conv2d'],'op_names': ['module.cnn.conv2']},
+    {'sparsity': 0.7,'op_types': ['Conv2d'],'op_names': ['module.cnn.conv3', 'module.cnn.conv4']}, 
+    {'sparsity': 0.85,'op_types': ['Conv2d'],'op_names': ['module.cnn.conv5', 'module.cnn.conv6']}]
 optimizer_finetune = optimizer
 pruner = L1FilterPruner(crnn, configure_list, optimizer_finetune)
 crnn = pruner.compress()
-for epoch in range(40):
+
+logger = get_logger('{}/exp.log'.format(opt.expr_dir))
+logger.info('start training!')
+logger.info('train dataset length:{}'.format(len(train_dataset)))
+logger.info('test dataset length:{}'.format(len(test_dataset)))
+
+for epoch in range(opt.nepoch):
+    
     pruner.update_epoch(epoch)
+#     print(crnn)
     print('# Epoch {} #'.format(epoch))
     train(crnn, criterion_c, optimizer, epoch, opt)
 #     if val_loss < best_loss:
-    pruner.export_model(model_path='{}/pruned_fots{}.pth'.format(opt.save_dir, epoch), \
-                        mask_path='{}/mask_fots{}.pth'.format(opt.save_dir, epoch))
+    pruner.export_model(model_path='{}/pruned_fots{}.pth'.format(opt.expr_dir, epoch), \
+                        mask_path='{}/mask_fots{}.pth'.format(opt.expr_dir, epoch))
