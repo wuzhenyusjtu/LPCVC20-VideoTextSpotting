@@ -38,6 +38,7 @@ For example, we can run it as:
 python3 get_data_json.py --datadir ../mnt/ramdisk/max/90kDICT32px --train_num 3000000 --test_num 30000
 ```
 Then we can find two json files in the same path of the dataset.
+
 Train a model from scratch
 -----------------
 Command:
