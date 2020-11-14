@@ -77,23 +77,11 @@ if torch.cuda.is_available() and not opt.cuda:
 
 transformer = dataset.resizeNormalize((100, 32))
 
-'''
-# If opt.ft set as true, then we use images generated from our sample dataset to finetune the pretrained model.
-# Else we use MJDataset to train the model from scratch.
-'''
-if opt.ft:
-    train_dataset = dataset.SampleDataset(root=opt.trainRoot)
-    test_dataset = dataset.SampleDataset(root=opt.valRoot, transform=transformer)
-    # Some paramters suggestions when finetuning:
-    opt.nepoch = 5
-    opt.batchSize = 256
-    opt.valInterval = 100
-    opt.saveInterval = 100
-else:
-    train_dataset = dataset.MJDataset(jsonpath=opt.trainRoot)
-    test_dataset = dataset.MJDataset(jsonpath=opt.valRoot, transform=transformer)
 
-    assert train_dataset
+train_dataset = dataset.MJDataset(jsonpath=opt.trainRoot)
+test_dataset = dataset.MJDataset(jsonpath=opt.valRoot, transform=transformer)
+
+assert train_dataset
     
 if not opt.random_sample:
     sampler = dataset.randomSequentialSampler(train_dataset, opt.batchSize)
