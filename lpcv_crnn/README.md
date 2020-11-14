@@ -48,7 +48,7 @@ Command:
 python3 train.py --adadelta --trainRoot  /path/to/train/json/file --valRoot /path/to/test/json/file --cuda 
 --expr_dir /path/to/saved/dir
 ```
-Use MJDataset to get the pretrained model. The two paths are the path to the two json files mentioned above. ```expr_dir``` parameter is the path to the saved models. </br>
+Use MJDataset to get the pretrained model. The two paths are the path to the two json files mentioned above. ```expr_dir``` parameter is the path to the saved models.
 ```adadelta``` is suggested. More parameters can be found in ```train_mj.py```. 
 
 Prune model 
