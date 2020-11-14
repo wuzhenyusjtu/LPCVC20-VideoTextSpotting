@@ -64,10 +64,8 @@ if torch.cuda.is_available() and not opt.cuda:
 
 transformer = dataset.resizeNormalize((100, 32))    
 
-# train_dataset = dataset.lmdbDataset(root=opt.trainroot)
-# train_dataset = dataset.SampleDataset(root=opt.trainRoot, transform=transformer)
+
 train_dataset = dataset.SampleDataset(root=opt.trainRoot)
-# train_dataset = dataset.SynthDataset(root=opt.trainRoot)
 assert train_dataset
 if not opt.random_sample:
     sampler = dataset.randomSequentialSampler(train_dataset, opt.batchSize)
@@ -79,14 +77,6 @@ train_loader = torch.utils.data.DataLoader(
     collate_fn=dataset.alignCollate(imgH=opt.imgH, imgW=opt.imgW, keep_ratio=opt.keep_ratio))
 
 test_dataset = dataset.SampleDataset(root=opt.valRoot, transform=transformer)
-# train_loader = torch.utils.data.DataLoader(
-#     train_dataset, batch_size=opt.batchSize,
-#     shuffle=True, sampler=sampler,
-#     num_workers=int(opt.workers),
-#     collate_fn=dataset.alignCollate(imgH=opt.imgH, imgW=opt.imgW, keep_ratio=opt.keep_ratio))
-# test_dataset = dataset.lmdbDataset(
-#     root=opt.valroot, transform=dataset.resizeNormalize((100, 32)))
-
 nclass = len(opt.alphabet) + 1
 nc = 1
 
@@ -115,14 +105,11 @@ def load_multi(model_path):
 crnn = CRNN_p(opt.imgH, nc, nclass, opt.nh)
 # crnn = crnn.CRNN(opt.imgH, nc, 35, opt.nh)
 crnn.apply(weights_init)
-# for idx, m in enumerate(crnn.rnn.children()):
-#     if idx == 0:
-#         m = crnn
+
 if opt.pretrained != '':
     print('loading pretrained model from %s' % opt.pretrained)
 #     crnn.load_state_dict(load_multi(opt.pretrained), strict=True)
     crnn.load_state_dict(torch.load(opt.pretrained), strict=True)
-# print(crnn)
 
 
 image = torch.FloatTensor(opt.batchSize, 3, opt.imgH, opt.imgH)
