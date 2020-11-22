@@ -15,62 +15,10 @@ import torch.utils.data
 import tqdm
 
 import standard.datasets as datasets
+from standard.train import train
 from nni.compression.torch import L1FilterPruner
 import time
 from utils.train_utils import detection_loss, load_multi
-
-def train(model, loss_func, opt, lr_scheduler, max_batches_per_iter_cnt, train_dl, valid_dl):
-    model.train()
-    train_loss_stats = 0.0
-    test_loss_stats = 0.0
-    loss_count_stats = 0
-    batch_per_iter_cnt = 0
-    pbar = tqdm.tqdm(train_dl, 'Epoch ' + str(epoch), ncols=80)
-    for cropped, classification, regression, thetas, training_mask in pbar:
-        if batch_per_iter_cnt == 0:
-            optimizer.zero_grad()
-        prediction = model(cropped.to('cuda'))
-
-        loss = loss_func(prediction, (classification, regression, thetas, training_mask)) / max_batches_per_iter_cnt
-        train_loss_stats += loss.item()
-        loss.backward()
-        batch_per_iter_cnt += 1
-        if batch_per_iter_cnt == max_batches_per_iter_cnt:
-            opt.step()
-            batch_per_iter_cnt = 0
-            loss_count_stats += 1
-            mean_loss = train_loss_stats / loss_count_stats
-            pbar.set_postfix({'Mean loss': f'{mean_loss:.5f}'}, refresh=False)
-    lr_scheduler.step(mean_loss, epoch)
-    if valid_dl is None:
-        val_loss = train_loss_stats / loss_count_stats
-    else:
-        model.eval()
-        with torch.no_grad():
-            val_loss = 0.0
-            val_loss_count = 0
-            pbar = tqdm.tqdm(valid_dl, 'Val Epoch ' + str(epoch), ncols=80)
-            loss_count_stats = 0
-            cnt_error = 0
-            for cropped, classification, regression, thetas, training_mask in pbar:
-                prediction = model(cropped.to('cuda'))
-                if prediction[0].shape[-1] != classification.shape[-1] or prediction[0].shape[-2] != classification.shape[-2]:
-                    cnt_error += 1
-                    continue
-                loss = loss_func(prediction, (classification, regression, thetas, training_mask))
-                val_loss += loss.item()
-                test_loss_stats += loss.item()
-                val_loss_count += len(cropped)
-                    
-                batch_per_iter_cnt += 1
-                if batch_per_iter_cnt == max_batches_per_iter_cnt:
-                    batch_per_iter_cnt = 0
-                    loss_count_stats += 1
-                    mean_loss = test_loss_stats / loss_count_stats
-                    pbar.set_postfix({'Mean loss': f'{mean_loss:.5f}'}, refresh=False)
-        val_loss /= val_loss_count
-        print("{} shape not match".format(cnt_error))
-    return mean_loss
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -141,5 +89,5 @@ if __name__ == '__main__':
     for epoch in range(50):
         pruner.update_epoch(epoch)
         print('# Epoch {} #'.format(epoch))
-        val_loss = train(model, detection_loss, optimizer, lr_scheduler, max_batches_per_iter_cnt, dl, dl_val)
+        val_loss = train(model, detection_loss, optimizer, lr_scheduler, max_batches_per_iter_cnt, dl, dl_val, epoch)
         pruner.export_model(model_path='{}/pruned_fots{}.pth'.format(output_path, epoch), mask_path='{}/mask_fots{}.pth'.format(output_path, epoch))
