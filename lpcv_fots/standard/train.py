@@ -12,8 +12,8 @@ import tqdm
 import sys 
 sys.path.append("..") 
 
-import datasets
-from model import FOTSModel
+from standard import datasets
+from standard.model import FOTSModel
 from prune.model_pruned import FOTSModel_pruned
 from modules.parse_polys import parse_polys
 from standard.test import val
