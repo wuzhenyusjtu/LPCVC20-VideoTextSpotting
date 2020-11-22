@@ -32,7 +32,7 @@ def train(model, loss_func, opt, lr_scheduler, max_batches_per_iter_cnt, train_d
     
     for cropped, classification, regression, thetas, training_mask in pbar:
         if batch_per_iter_cnt == 0:
-            optimizer.zero_grad()
+            opt.zero_grad()
         prediction = model(cropped.to('cuda'))
 
         loss = loss_func(prediction, (classification, regression, thetas, training_mask)) / max_batches_per_iter_cnt
