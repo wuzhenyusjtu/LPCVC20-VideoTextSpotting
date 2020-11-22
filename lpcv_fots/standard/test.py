@@ -12,8 +12,9 @@ import tqdm
 import sys 
 sys.path.append("..") 
 
-import datasets
-from model import FOTSModel
+
+from standard import datasets
+from standard.model import FOTSModel
 from prune.model_pruned import FOTSModel_pruned
 from modules.parse_polys import parse_polys
 from utils.train_utils import load_multi, restore_checkpoint, fill_ohem_mask, detection_loss
