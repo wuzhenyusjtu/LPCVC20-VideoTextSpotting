@@ -23,18 +23,18 @@ We train the fots twice in our pipeline. We first train Fots model from scratch 
 Original model can be found in ```model.py```. 
 1. Train from scratch with Merged dataset 
     ```sh
-    python3 train_sample.py --train-folder-syn /path/to/SynthText --train-folder-sample /path/to/SampleDataset \
+    python3 train.py --train-folder-syn /path/to/SynthText --train-folder-sample /path/to/SampleDataset \
     --batch-size 64 --batches-before-train 2 --ngpus 1 --save-dir /path/to/save/dir --epoch 30 --val
     ```
 2. Train with pretrained model with Merged dataset 
     ```sh
-    python3 train_sample.py --train-folder-syn /path/to/SynthText --train-folder-sample /path/to/SampleDataset \
+    python3 train.py --train-folder-syn /path/to/SynthText --train-folder-sample /path/to/SampleDataset \
     --batch-size 64 --batches-before-train 2 --ngpus 1 --save-dir /path/to/save/dir --epoch 30 --val \
     --pretrain-model /path/to/pretrained/model --continue-training
     ```
 3. Train with pretrained model with only SynthText dataset 
     ```sh
-    python3 train_sample.py --train-folder-syn /path/to/SynthText --batch-size 64 --batches-before-train 2 \
+    python3 train.py --train-folder-syn /path/to/SynthText --batch-size 64 --batches-before-train 2 \
     --ngpus 1 --save-dir /path/to/save/dir --epoch 30 --val \
     --pretrain-model /path/to/pretrained/model --continue-training
     ```
@@ -55,7 +55,7 @@ After we got the pruned model, we finetuned the model with Merged Dataset. Prune
 
 1. Train pruned model with Merged dataset 
     ```sh
-    python3 train_sample.py --train-folder-syn /path/to/SynthText --train-folder-sample /path/to/SampleDataset \
+    python3 train.py --train-folder-syn /path/to/SynthText --train-folder-sample /path/to/SampleDataset \
     --batch-size 64 --batches-before-train 2 --ngpus 1 --save-dir /path/to/save/dir --epoch 30 --val \
     --pretrain-model /path/to/pruned/model --continue-training --prune 
     ```
@@ -71,13 +71,13 @@ You can test the model's performance by running test_sample.py file. Only suppor
 1. Test original trained model
 
 ```sh
-    python3 test_sample.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pretrained/model
+    python3 test.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pretrained/model
 ```
 
 2. Test exported pruned model
 
 ```sh
-    python3 test_sample.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pruned/model --prune
+    python3 test.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pruned/model --prune
 ```
 
 ### Model Link
