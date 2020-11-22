@@ -27,26 +27,21 @@ import sys
 sys.path.append("..") 
 from standard.model import conv, Decoder
 
-# def conv(in_channels, out_channels, kernel_size=3, padding=1, bn=True, dilation=1, stride=1, relu=True, bias=True):
-#     modules = [nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, bias=bias)]
-#     if bn:
-#         modules.append(nn.BatchNorm2d(out_channels))
-#     if relu:
-#         modules.append(nn.ReLU(inplace=False))
-#     return nn.Sequential(*modules)
-
-# class Decoder(nn.Module):
-#     def __init__(self, in_channels, squeeze_channels):
-#         super().__init__()
-#         self.squeeze = conv(in_channels, squeeze_channels)
-#         self.add_relu = torch.nn.quantized.FloatFunctional()
-#     def forward(self, x, encoder_features):
-#         x = self.squeeze(x)
-#         x = F.interpolate(x, size=(encoder_features.shape[2], encoder_features.shape[3]), mode='bilinear', align_corners=True)
-#         up = self.add_relu.cat([encoder_features, x], 1)
-#         return up
-
-# class Center(nn.Module):
+'''
+Class for Quantizeable FOTs model. Some details:
+- Original FOTs model forward process can be found in FOTSModel in standard.model
+- Adding early exit module into FOTs model:
+    -- Early exit module uses the results of encoder2 layer as inputs. If the early exit modules judges that the process need to go on, then it means that the whole FOTs model needs to go on and the results of both encoder1 and encoder2 should be passed to encoder3 and the later on layers.
+    -- Problem: Quantized model is as a whole. It cannot deal with the if-else branch operations.
+    -- Solution: Devide whole model into three parts:
+        Part1: Encoder1 and layers before.
+        Part2: Encoder2.
+        Part3: Encoder3 and layers after.
+        Rejector: Early exit module
+        So that we can quantize these three parts separately and get intermediate results for early exit module.
+- Method fuse_conv（）can fuse conv+bn+relu layers into one layer for future model quantization.
+- Method fuse_model() fuse all modules in FOTs model.
+'''
 class FOTSModel_q(nn.Module):
     def __init__(self, crop_height=640):
         super().__init__()
@@ -145,7 +140,11 @@ class FOTSModel_q(nn.Module):
             return None, None, None
         confidence, distances, angle = self.part3(e1, e2)
         return confidence, distances, angle
-    
+
+'''
+All modules come from the encoder3 layer and layers afterwards from the FOTs model.
+Integrate all modules into one class called Part3.
+'''
 class Part3(nn.Module):
     def __init__(self, encoder3, encoder4, center, decoder4, decoder3, decoder2, decoder1, remove_artifacts, \
                 confidence, distances, angle, crop_height):
@@ -228,27 +227,39 @@ if __name__ == '__main__':
     
     net.load_state_dict(checkpoint, strict=False)
     _dummy_input_data = torch.rand(1, 3, 299, 299)
+    
+    # Must set eval
     net.eval()
     
+    # Get quantization configure
     qcf = torch.quantization.get_default_qconfig(args.backends)
+    
+    # Set quantization configure to all parts in FOTs model
     net.rejector.qconfig = qcf
     net.part1.qconfig = qcf
     net.part2.qconfig = qcf
     net.part3.qconfig = qcf
+    
+    # Fuse all parts in the FOTs model
     net.fuse_model()
+    
+    # Prepare the quantization for all parts
     torch.quantization.prepare(net.rejector, inplace=True)
     torch.quantization.prepare(net.part1, inplace=True)
     torch.quantization.prepare(net.part2, inplace=True)
     torch.quantization.prepare(net.part3, inplace=True)
     
+    # Use some images from the folder for evaluation or calibration
     images_folder = args.calibrate_folder
     evaluate_net(net, images_folder)
     
+    # Convert all parts into quantized ones
     torch.quantization.convert(net.rejector, inplace=True)
     torch.quantization.convert(net.part1, inplace=True)
     torch.quantization.convert(net.part2, inplace=True)
     torch.quantization.convert(net.part3, inplace=True)
-
+    
+    # Get the backend and save the torchscript files to the specific path
     backend = args.backends
     torch.jit.save(torch.jit.script(net.rejector), '{}/rejector_{}.torchscript'.format(args.save_dir, backend))
     torch.jit.save(torch.jit.script(net.part1), '{}/part1_{}.torchscript'.format(args.save_dir, backend))
