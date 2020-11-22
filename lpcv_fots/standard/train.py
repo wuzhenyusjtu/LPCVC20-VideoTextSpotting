@@ -16,46 +16,45 @@ import datasets
 from model import FOTSModel
 from prune.model_pruned import FOTSModel_pruned
 from modules.parse_polys import parse_polys
-from test import val
+from standard.test import val
 
 from utils.train_utils import load_multi, restore_checkpoint, save_checkpoint, fill_ohem_mask, detection_loss
 
 # Train and validate the model
-def fit(start_epoch, num_epochs, model, loss_func, opt, lr_scheduler, best_score, max_batches_per_iter_cnt, checkpoint_dir, train_dl, valid_dl):
-    batch_per_iter_cnt = 0
-    for epoch in range(start_epoch, start_epoch + num_epochs):
-        model.train()
-        train_loss_stats = 0.0
-        test_loss_stats = 0.0
-        loss_count_stats = 0
-        pbar = tqdm.tqdm(train_dl, 'Epoch ' + str(epoch), ncols=80)
-        cnt_error_t = 0
-        for cropped, classification, regression, thetas, training_mask in pbar:
-            if batch_per_iter_cnt == 0:
-                optimizer.zero_grad()
-            prediction = model(cropped.to('cuda'))
-            
-            if prediction[0].shape[-1] != classification.shape[-1] or prediction[0].shape[-2] != classification.shape[-2]:
-                cnt_error_t += 1
-                continue
-            
-            loss = loss_func(prediction, (classification, regression, thetas, training_mask)) / max_batches_per_iter_cnt
-            train_loss_stats += loss.item()
-            loss.backward()
-            batch_per_iter_cnt += 1
-            if batch_per_iter_cnt == max_batches_per_iter_cnt:
-                opt.step()
-                batch_per_iter_cnt = 0
-                loss_count_stats += 1
-                mean_loss = train_loss_stats / loss_count_stats
-                pbar.set_postfix({'Mean loss': f'{mean_loss:.5f}'}, refresh=False)
-        lr_scheduler.step(mean_loss, epoch)
-                
-        if valid_dl is None:
-            val_loss = train_loss_stats / loss_count_stats
-        else:
-            val_loss = val(model, loss_func, opt, max_batches_per_iter_cnt, valid_dl)
 
+def train(model, loss_func, opt, lr_scheduler, max_batches_per_iter_cnt, train_dl, valid_dl, epoch):
+    model.train()
+    train_loss_stats = 0.0
+    test_loss_stats = 0.0
+    loss_count_stats = 0
+    batch_per_iter_cnt = 0
+    pbar = tqdm.tqdm(train_dl, 'Epoch ' + str(epoch), ncols=80)
+    
+    for cropped, classification, regression, thetas, training_mask in pbar:
+        if batch_per_iter_cnt == 0:
+            optimizer.zero_grad()
+        prediction = model(cropped.to('cuda'))
+
+        loss = loss_func(prediction, (classification, regression, thetas, training_mask)) / max_batches_per_iter_cnt
+        train_loss_stats += loss.item()
+        loss.backward()
+        batch_per_iter_cnt += 1
+        if batch_per_iter_cnt == max_batches_per_iter_cnt:
+            opt.step()
+            batch_per_iter_cnt = 0
+            loss_count_stats += 1
+            mean_loss = train_loss_stats / loss_count_stats
+            pbar.set_postfix({'Mean loss': f'{mean_loss:.5f}'}, refresh=False)
+    lr_scheduler.step(mean_loss, epoch)
+    if valid_dl is None:
+        val_loss = train_loss_stats / loss_count_stats
+    else:
+        val_loss = val(model, loss_func, opt, max_batches_per_iter_cnt, valid_dl)
+    return mean_loss
+
+def fit(start_epoch, num_epochs, model, loss_func, opt, lr_scheduler, best_score, max_batches_per_iter_cnt, checkpoint_dir, train_dl, valid_dl):
+    for epoch in range(start_epoch, start_epoch + num_epochs):
+        val_loss = train(model, loss_func, opt, lr_scheduler, max_batches_per_iter_cnt, train_dl, valid_dl, epoch)
         if best_score > val_loss:
             best_score = val_loss
             save_as_best = True
