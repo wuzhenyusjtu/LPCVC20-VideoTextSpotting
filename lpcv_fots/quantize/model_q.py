@@ -27,26 +27,12 @@ import sys
 sys.path.append("..") 
 from prune.model_pruned import conv3x3, conv1x1, resnet34, _resnet, BasicBlock, _ResNet
 
-def quantize_model(model, backend):
-    _dummy_input_data = torch.rand(1, 3, 224, 224)
-    if backend not in torch.backends.quantized.supported_engines:
-        raise RuntimeErrir("Quantized backend not supported")
-    torch.backends.quantized.engine = backend
-    model.eval()
-    
-    if backend == 'fbgemm':
-        model.qconfig = torch.quantization.QConfig(
-            activation=torch.quantization.default_observer,
-            weight=torch.quantization.default_per_channel_weight_observer)
-    elif backend == 'qnnpack':
-        model.qconfig = torch.quantization.QConfig(
-            activation=torch.quantization.default_observer,
-            weight=torch.quantization.default_weight_observer)
-    model.fuse_model()
-    torch.quantization.prepare(model, inplace=True)
-    torch.quantization.convert(model, inplace=True)
-    
-    return 
+'''
+Quantizable Basic Block for ResNet. Some details:
+- Replace add operation with torch.nn.quantized.FloatFunctional() to make it quantizable
+- Method fuse_model() is used to fuse conv+bn+relu layers into one layer to make it quantizable, otherwise quantized results nonsense.
+- More details about why do fuse_model() please check Pytorch offical documents.
+'''
 class QuantizableBasicBlock(BasicBlock):
     def __init__(self, *args, **kwargs):
         super(QuantizableBasicBlock, self).__init__(*args, **kwargs)
@@ -70,7 +56,11 @@ class QuantizableBasicBlock(BasicBlock):
         if self.downsample:
             torch.quantization.fuse_modules(self.downsample, ['0', '1'], inplace=True)
 
-# class QuantizableResNet(ResNet):
+'''
+Quantizable Resnet constructed by QuantizableBasicBlock. Some details:
+- Methods QuantStub/DeQuantStub do pre/after quantization for inputs/outputs.
+- Method fuse_model fuse the 'conv1', 'bn1', 'relu' layers in ResNet and call fuse_model functions in its modules to do fuse for all parts.
+'''
 class ResNet(_ResNet):
     def __init__(self, *args, **kwargs):
         super(ResNet, self).__init__(*args, **kwargs)
@@ -89,6 +79,9 @@ class ResNet(_ResNet):
         for m in self.modules():
             if type(m) == QuantizableBasicBlock:
                 m.fuse_model()
+'''
+Wrapper functions for quantized models (Consistent with resnet from Pytorch)
+'''
 def qresnet34(pretrained=False, progress=True, quantize=True, **kwargs):
     return _qresnet('resnet34', QuantizableBasicBlock, [3,4,6,3], pretrained, progress, quantize, **kwargs)
 def _qresnet(arch, block, layers, pretrained, progress, quantize, **kwargs):
