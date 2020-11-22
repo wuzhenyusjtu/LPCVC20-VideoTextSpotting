@@ -59,7 +59,7 @@ class clf_FOTS(FOTSModel_q):
         
         return x
 
-class clr_dataloader():
+class clf_dataloader():
     def __init__(self, img_list):
         self.img_list = img_list
 
@@ -80,7 +80,7 @@ class clr_dataloader():
         label = torch.tensor(int(self.img_list[idx].split('/')[-1].split('_')[1]))
         return image_tensor, label
     
-def train_clr(model, dataloaders, criterion, optimizer, num_epoch=25):
+def train_clf(model, dataloaders, criterion, optimizer, num_epoch=25):
     for epoch in range(num_epoch):
         print('Epoch {}/{}'.format(epoch, num_epoch-1))
         print('-'*10)
@@ -158,17 +158,17 @@ if __name__ == '__main__':
         
 
     # Load pretrained model
-    clr = clf_FOTS()
+    clf = clf_FOTS()
 
     checkpoint_name = args.pretrain_model
     checkpoint = torch.load(checkpoint_name, map_location='cpu')
-    clr.load_state_dict(checkpoint['model_state_dict'], strict=False)
+    clf.load_state_dict(checkpoint['model_state_dict'], strict=False)
 
     need_grads = ['fc.weight','fc.bias','last_conv.weight','last_conv.bias',\
              'down_conv.0.weight', 'down_conv.0.bias', 'down_conv.1.weight', 'down_conv.1.bias']
 
     # Set parameters whether need grads.
-    for name, param in clr.named_parameters():
+    for name, param in clf.named_parameters():
         print(name, ": ", param.requires_grad)
     #     if name == 'fc.weight' or name == 'fc.bias' or name == 'last_conv.weight' or name == 'last_conv.bias':
         if name in need_grads:
@@ -178,7 +178,7 @@ if __name__ == '__main__':
         print("After setting: ", name, ": ", param.requires_grad)
 
     _dummy_input_data = torch.rand(1, 3, 299, 299).cpu()
-    res = clr(_dummy_input_data)
+    res = clf(_dummy_input_data)
     
     # Dataloader for classifition
 
@@ -201,23 +201,23 @@ if __name__ == '__main__':
                 file_path = os.path.join(path, file)
                 img_list_test.append(file_path)
     print(len(img_list_test))
-    img_train_loader = clr_dataloader(img_list)
-    img_test_loader = clr_dataloader(img_list_test)
+    img_train_loader = clf_dataloader(img_list)
+    img_test_loader = clf_dataloader(img_list_test)
     dataloaders = {'train':torch.utils.data.DataLoader(img_train_loader, batch_size=1, shuffle=True, num_workers=1),
                    'test':torch.utils.data.DataLoader(img_test_loader, batch_size=1, shuffle=True, num_workers=1)}
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Set optimizer and criterion
     params_to_update = []
-    for name, params in clr.named_parameters():
+    for name, params in clf.named_parameters():
         if params.requires_grad == True:
             params_to_update.append(params)
             print('{} need grad.'.format(name))
     optimizer_ft = optim.SGD(params_to_update, lr=0.002, momentum=0.9)
     criterion = nn.BCELoss()
     
-    clr = clr.to(device)
+    clf = clf.to(device)
 
-    clr_trained = train_clr(clr, dataloaders, criterion, optimizer_ft, num_epoch=args.epochs)
+    clf_trained = train_clf(clf, dataloaders, criterion, optimizer_ft, num_epoch=args.epochs)
     
-    torch.save(clr.state_dict(), '{}/early_exit_model.pkl'.format(args.save_dir))
+    torch.save(clf.state_dict(), '{}/early_exit_model.pkl'.format(args.save_dir))
