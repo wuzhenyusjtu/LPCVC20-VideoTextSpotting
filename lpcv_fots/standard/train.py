@@ -16,6 +16,7 @@ import datasets
 from model import FOTSModel
 from prune.model_pruned import FOTSModel_pruned
 from modules.parse_polys import parse_polys
+from test import val
 
 from utils.train_utils import load_multi, restore_checkpoint, save_checkpoint, fill_ohem_mask, detection_loss
 
@@ -49,35 +50,11 @@ def fit(start_epoch, num_epochs, model, loss_func, opt, lr_scheduler, best_score
                 mean_loss = train_loss_stats / loss_count_stats
                 pbar.set_postfix({'Mean loss': f'{mean_loss:.5f}'}, refresh=False)
         lr_scheduler.step(mean_loss, epoch)
-        
+                
         if valid_dl is None:
             val_loss = train_loss_stats / loss_count_stats
         else:
-            model.eval()
-            with torch.no_grad():
-                val_loss = 0.0
-                val_loss_count = 0
-                pbar = tqdm.tqdm(valid_dl, 'Val Epoch ' + str(epoch), ncols=80)
-                loss_count_stats = 0
-                cnt_error = 0
-                for cropped, classification, regression, thetas, training_mask in pbar:
-                    prediction = model(cropped.to('cuda'))
-                    if prediction[0].shape[-1] != classification.shape[-1] or prediction[0].shape[-2] != classification.shape[-2]:
-                        cnt_error += 1
-                        continue
-                    loss = loss_func(prediction, (classification, regression, thetas, training_mask))
-                    val_loss += loss.item()
-                    test_loss_stats += loss.item()
-                    val_loss_count += len(cropped)
-                    
-                    batch_per_iter_cnt += 1
-                    if batch_per_iter_cnt == max_batches_per_iter_cnt:
-                        batch_per_iter_cnt = 0
-                        loss_count_stats += 1
-                        mean_loss = test_loss_stats / loss_count_stats
-                        pbar.set_postfix({'Mean loss': f'{mean_loss:.5f}'}, refresh=False)
-            val_loss /= val_loss_count
-            print("{} shape not match".format(cnt_error))
+            val_loss = val(model, loss_func, opt, max_batches_per_iter_cnt, valid_dl)
 
         if best_score > val_loss:
             best_score = val_loss
