@@ -110,7 +110,7 @@ if __name__ == '__main__':
     model_new = model.eval()
     model_new = copy.deepcopy(model)
     new_dict = {}
-
+    
     for i in range(4):
         module = fots_l[i][1]
         if isinstance(module, torch.nn.Conv2d):
@@ -124,7 +124,7 @@ if __name__ == '__main__':
     model_new.resnet.conv1 = new_dict['conv1']
     model_new.resnet.bn1 = new_dict['bn1']
 
-    # Code for layer 1
+    # Code for Conv1
 
     fots_l = list(model.resnet.layer1._modules.items())
     new_dict_layer1 = {}
@@ -151,153 +151,71 @@ if __name__ == '__main__':
         m.conv2 = conv_dict['conv2']
         m.bn2 = conv_dict['bn2']
 
-    # Code for layer 2
+    # Code for Encoders
+    def copy_res_layer(last_channels, fots_l):
+        last_down_channels = last_channels
+        new_dict = {}
+        for i in range(len(fots_l)):
+            module = fots_l[i][1]
+            new_dict[i] = {}
+            module_l = list(module._modules.items())
 
+            for j in range(len(module_l)):
+                module_b = module_l[j][1]
+                if isinstance(module_b, torch.nn.Conv2d):
+                    out_channels = get_out_channel(module_b)
+                    new = set_weight_conv(last_channels, out_channels, module_b)
+                    last_channels = out_channels
+                    new_dict[i][module_l[j][0]] = new
+                elif isinstance(module_b, torch.nn.BatchNorm2d):
+                    new = set_bn(out_channels, module_b)
+                    new_dict[i][module_l[j][0]] = new
+                elif isinstance(module_b, torch.nn.ReLU):
+                    continue
+                else:
+                    module_down = list(module_b._modules.items())
+                    new_dict['downsample'] = {}
+                    for k in range(len(module_down)):
+                        module_k = module_down[k][1]
+                        if isinstance(module_k, torch.nn.Conv2d):
+                            out_channels = get_out_channel(module_k)
+                            new = set_weight_conv(last_down_channels, out_channels, module_k)
+                            last_channels = out_channels
+                            new_dict['downsample'][module_down[k][0]] = new
+                        elif isinstance(module_k, torch.nn.BatchNorm2d):
+                            new = set_bn(out_channels, module_k)
+                            new_dict['downsample'][module_down[k][0]] = new
+        return last_channels, new_dict
+    
+    def set_values_res_layer(layer, new_dict):
+        for idx, m in enumerate(layer.children()):
+            conv_dict = new_dict[idx]
+            m.conv1 = conv_dict['conv1']
+            m.bn1 = conv_dict['bn1']
+            m.conv2 = conv_dict['conv2']
+            m.bn2 = conv_dict['bn2']
+            if idx == 0:
+                m.downsample = nn.Sequential(
+                    new_dict['downsample']['0'],
+                    new_dict['downsample']['1'],)
+                
     last_down_channels_1 = last_channels
-    fots_l = list(model.resnet.layer2._modules.items())
-    new_dict_layer2 = {}
-    for i in range(len(fots_l)):
-        module = fots_l[i][1]
-        new_dict_layer2[i] = {}
-        module_l = list(module._modules.items())
-
-        for j in range(len(module_l)):
-            module_b = module_l[j][1]
-            if isinstance(module_b, torch.nn.Conv2d):
-                out_channels = get_out_channel(module_b)
-                new = set_weight_conv(last_channels, out_channels, module_b)
-                last_channels = out_channels
-                new_dict_layer2[i][module_l[j][0]] = new
-            elif isinstance(module_b, torch.nn.BatchNorm2d):
-                new = set_bn(out_channels, module_b)
-                new_dict_layer2[i][module_l[j][0]] = new
-            elif isinstance(module_b, torch.nn.ReLU):
-                continue
-            else:
-                module_down = list(module_b._modules.items())
-                new_dict_layer2['downsample'] = {}
-                for k in range(len(module_down)):
-                    module_k = module_down[k][1]
-                    if isinstance(module_k, torch.nn.Conv2d):
-                        out_channels = get_out_channel(module_k)
-                        new = set_weight_conv(last_down_channels_1, out_channels, module_k)
-                        last_channels = out_channels
-                        new_dict_layer2['downsample'][module_down[k][0]] = new
-                    elif isinstance(module_k, torch.nn.BatchNorm2d):
-                        new = set_bn(out_channels, module_k)
-                        new_dict_layer2['downsample'][module_down[k][0]] = new
-
-    for idx, m in enumerate(model_new.resnet.layer2.children()):
-        conv_dict = new_dict_layer2[idx]
-        m.conv1 = conv_dict['conv1']
-        m.bn1 = conv_dict['bn1']
-        m.conv2 = conv_dict['conv2']
-        m.bn2 = conv_dict['bn2']
-        if idx == 0:
-            m.downsample = nn.Sequential(
-                new_dict_layer2['downsample']['0'],
-                new_dict_layer2['downsample']['1'],)
-            
-    # Code for layer 3
-
+    last_channels, new_dict = copy_res_layer(last_channels, list(model.resnet.layer2._modules.items()))
+    set_values_res_layer(model_new.resnet.layer2, new_dict)
+    
     last_down_channels_2 = last_channels
-    fots_l = list(model.resnet.layer3._modules.items())
-    new_dict_layer3 = {}
-    for i in range(len(fots_l)):
-        module = fots_l[i][1]
-        new_dict_layer3[i] = {}
-        module_l = list(module._modules.items())
-
-        for j in range(len(module_l)):
-            module_b = module_l[j][1]
-            if isinstance(module_b, torch.nn.Conv2d):
-                out_channels = get_out_channel(module_b)
-                new = set_weight_conv(last_channels, out_channels, module_b)
-                last_channels = out_channels
-                new_dict_layer3[i][module_l[j][0]] = new
-            elif isinstance(module_b, torch.nn.BatchNorm2d):
-                new = set_bn(out_channels, module_b)
-                new_dict_layer3[i][module_l[j][0]] = new
-            elif isinstance(module_b, torch.nn.ReLU):
-                continue
-            else:
-                module_down = list(module_b._modules.items())
-                new_dict_layer3['downsample'] = {}
-                for k in range(len(module_down)):
-                    module_k = module_down[k][1]
-                    if isinstance(module_k, torch.nn.Conv2d):
-                        out_channels = get_out_channel(module_k)
-                        new = set_weight_conv(last_down_channels_2, out_channels, module_k)
-                        last_channels = out_channels
-                        new_dict_layer3['downsample'][module_down[k][0]] = new
-                    elif isinstance(module_k, torch.nn.BatchNorm2d):
-                        new = set_bn(out_channels, module_k)
-                        new_dict_layer3['downsample'][module_down[k][0]] = new
-
-
-    for idx, m in enumerate(model_new.resnet.layer3.children()):
-        conv_dict = new_dict_layer3[idx]
-        m.conv1 = conv_dict['conv1']
-        m.bn1 = conv_dict['bn1']
-        m.conv2 = conv_dict['conv2']
-        m.bn2 = conv_dict['bn2']
-        if idx == 0:
-            m.downsample = nn.Sequential(
-                new_dict_layer3['downsample']['0'],
-                new_dict_layer3['downsample']['1'],)
-
-    # Code for layer 4
-
+    last_channels, new_dict = copy_res_layer(last_channels, list(model.resnet.layer3._modules.items()))
+    set_values_res_layer(model_new.resnet.layer3, new_dict)
+    
     last_down_channels_3 = last_channels
-    fots_l = list(model.resnet.layer4._modules.items())
-    new_dict_layer4 = {}
-    for i in range(len(fots_l)):
-        module = fots_l[i][1]
-        new_dict_layer4[i] = {}
-        module_l = list(module._modules.items())
-
-        for j in range(len(module_l)):
-            module_b = module_l[j][1]
-            if isinstance(module_b, torch.nn.Conv2d):
-                out_channels = get_out_channel(module_b)
-                new = set_weight_conv(last_channels, out_channels, module_b)
-                last_channels = out_channels
-                new_dict_layer4[i][module_l[j][0]] = new
-            elif isinstance(module_b, torch.nn.BatchNorm2d):
-                new = set_bn(out_channels, module_b)
-                new_dict_layer4[i][module_l[j][0]] = new
-            elif isinstance(module_b, torch.nn.ReLU):
-                continue
-            else:
-                module_down = list(module_b._modules.items())
-                new_dict_layer4['downsample'] = {}
-                for k in range(len(module_down)):
-                    module_k = module_down[k][1]
-                    if isinstance(module_k, torch.nn.Conv2d):
-                        out_channels = get_out_channel(module_k)
-                        new = set_weight_conv(last_down_channels_3, out_channels, module_k)
-                        last_channels = out_channels
-                        new_dict_layer4['downsample'][module_down[k][0]] = new
-                    elif isinstance(module_k, torch.nn.BatchNorm2d):
-                        new = set_bn(out_channels, module_k)
-                        new_dict_layer4['downsample'][module_down[k][0]] = new
-
-    for idx, m in enumerate(model_new.resnet.layer4.children()):
-        conv_dict = new_dict_layer4[idx]
-        m.conv1 = conv_dict['conv1']
-        m.bn1 = conv_dict['bn1']
-        m.conv2 = conv_dict['conv2']
-        m.bn2 = conv_dict['bn2']
-        if idx == 0:
-            m.downsample = nn.Sequential(
-                new_dict_layer4['downsample']['0'],
-                new_dict_layer4['downsample']['1'],)
-
+    last_channels, new_dict = copy_res_layer(last_channels, list(model.resnet.layer4._modules.items()))
+    set_values_res_layer(model_new.resnet.layer4, new_dict)
+    
     last_down_channels_4 = last_channels
     
     # Code for center
-
-    last_channels = last_down_channels_4
+    
+    last_down_channels_4 = last_channels
     fots_l = list(model.center._modules.items())
     new_dict_center = {}
     for i in range(len(fots_l)):
@@ -332,164 +250,69 @@ if __name__ == '__main__':
         )
     last_center_channels = last_channels
     
-    # Code for decoder 4
-
-    last_channels = last_center_channels
-    fots_l = list(model.decoder4.squeeze._modules.items())
-    new_dict_decoder4 = {}
-    for i in range(len(fots_l)):
-        module_b = fots_l[i][1]
-        if isinstance(module_b, torch.nn.Conv2d):
-            out_channels = get_out_channel(module_b)
-            new = set_weight_conv(last_channels, out_channels, module_b)
-            last_channels = out_channels
-            new_dict_decoder4[fots_l[i][0]] = new
-        elif isinstance(module_b, torch.nn.BatchNorm2d):
-            new = set_bn(out_channels, module_b)
-            new_dict_decoder4[fots_l[i][0]] = new
-        elif isinstance(module_b, torch.nn.ReLU):
-            new_dict_decoder4[fots_l[i][0]] = module_b
-
-    model_new.decoder4.squeeze = nn.Sequential(
-                new_dict_decoder4['0'],
-                new_dict_decoder4['1'],
-                new_dict_decoder4['2'],)
-    last_decoder4_channels = last_channels
+    # Code for decoders
+    def copy_decoder(last_channels, fots_l):
+        new_dict = {}
+        for i in range(len(fots_l)):
+            module_b = fots_l[i][1]
+            if isinstance(module_b, torch.nn.Conv2d):
+                out_channels = get_out_channel(module_b)
+                new = set_weight_conv(last_channels, out_channels, module_b)
+                last_channels = out_channels
+                new_dict[fots_l[i][0]] = new
+            elif isinstance(module_b, torch.nn.BatchNorm2d):
+                new = set_bn(out_channels, module_b)
+                new_dict[fots_l[i][0]] = new
+            elif isinstance(module_b, torch.nn.ReLU):
+                new_dict[fots_l[i][0]] = module_b
+        return last_channels, new_dict
     
-    # Code for decoder 3
-
-    last_e4_channels = last_down_channels_4
-    last_d4_channels = last_decoder4_channels
-    last_channels = []
-    for i in range(len(last_e4_channels)):
-        last_channels.append(last_e4_channels[i])
-        last_channels.append(last_d4_channels[i] + 512)
-
-    fots_l = list(model.decoder3.squeeze._modules.items())
-    new_dict_decoder3 = {}
-    for i in range(len(fots_l)):
-        module_b = fots_l[i][1]
-        if isinstance(module_b, torch.nn.Conv2d):
-            out_channels = get_out_channel(module_b)
-            new = set_weight_conv(last_channels, out_channels, module_b)
-            last_channels = out_channels
-            new_dict_decoder3[fots_l[i][0]] = new
-        elif isinstance(module_b, torch.nn.BatchNorm2d):
-            new = set_bn(out_channels, module_b)
-            new_dict_decoder3[fots_l[i][0]] = new
-        elif isinstance(module_b, torch.nn.ReLU):
-            new_dict_decoder3[fots_l[i][0]] = module_b
-
-    model_new.decoder3.squeeze = nn.Sequential(
-                new_dict_decoder3['0'],
-                new_dict_decoder3['1'],
-                new_dict_decoder3['2'],
-        )
-    last_decoder3_channels = last_channels
+    def process_decoder(old_layer, target_layer, last_channels):
+        try:
+            last_channels, new_dict = copy_decoder(last_channels, list(old_layer.squeeze._modules.items()))
+            target_layer.squeeze = nn.Sequential(
+                    new_dict['0'],
+                    new_dict['1'],
+                    new_dict['2'],)
+        except:
+            last_channels, new_dict = copy_decoder(last_channels, list(old_layer._modules.items()))
+            target_layer = nn.Sequential(
+                    new_dict['0'],
+                    new_dict['1'],
+                    new_dict['2'],)
+        return last_channels
     
-    # Code for decoder 2
-
-    last_e3_channels = last_down_channels_3
-    last_d3_channels = last_decoder3_channels
-    last_channels = []
-    for i in range(len(last_e3_channels)):
-        last_channels.append(last_e3_channels[i])
-        last_channels.append(last_d3_channels[i] + 256)
-
-    fots_l = list(model.decoder2.squeeze._modules.items())
-    new_dict_decoder2 = {}
-    for i in range(len(fots_l)):
-        module_b = fots_l[i][1]
-        if isinstance(module_b, torch.nn.Conv2d):
-            out_channels = get_out_channel(module_b)
-            new = set_weight_conv(last_channels, out_channels, module_b)
-            last_channels = out_channels
-            new_dict_decoder2[fots_l[i][0]] = new
-        elif isinstance(module_b, torch.nn.BatchNorm2d):
-            new = set_bn(out_channels, module_b)
-            new_dict_decoder2[fots_l[i][0]] = new
-        elif isinstance(module_b, torch.nn.ReLU):
-            new_dict_decoder2[fots_l[i][0]] = module_b
-
-    model_new.decoder2.squeeze = nn.Sequential(
-                new_dict_decoder2['0'],
-                new_dict_decoder2['1'],
-                new_dict_decoder2['2'],
-        )
-    last_decoder2_channels = last_channels
+    def get_merged_channels(d_channels, e_channels):
+        last_channels = []
+        for i in range(len(e_channels)):
+            last_channels.append(e_channels[i])
+            last_channels.append(d_channels[i] + len(e_channels) * 2)
+        return last_channels
+            
+    last_d4_channels = process_decoder(model.decoder4, model_new.decoder4, last_channels)
     
-    # Code for decoder 1
-
-    last_e2_channels = last_down_channels_2
-    last_d2_channels = last_decoder2_channels
-    last_channels = []
-    for i in range(len(last_e2_channels)):
-        last_channels.append(last_e2_channels[i])
-        last_channels.append(last_d2_channels[i] + 128)
-
-    fots_l = list(model.decoder1.squeeze._modules.items())
-    new_dict_decoder1 = {}
-    for i in range(len(fots_l)):
-        module_b = fots_l[i][1]
-        if isinstance(module_b, torch.nn.Conv2d):
-            out_channels = get_out_channel(module_b)
-            new = set_weight_conv(last_channels, out_channels, module_b)
-            last_channels = out_channels
-            new_dict_decoder1[fots_l[i][0]] = new
-        elif isinstance(module_b, torch.nn.BatchNorm2d):
-            new = set_bn(out_channels, module_b)
-            new_dict_decoder1[fots_l[i][0]] = new
-        elif isinstance(module_b, torch.nn.ReLU):
-            new_dict_decoder1[fots_l[i][0]] = module_b
-
-    model_new.decoder1.squeeze = nn.Sequential(
-                new_dict_decoder1['0'],
-                new_dict_decoder1['1'],
-                new_dict_decoder1['2'],
-        )
-    last_decoder1_channels = last_channels
+    last_channels = get_merged_channels(last_d4_channels, last_down_channels_4)
+    last_d3_channels = process_decoder(model.decoder3, model_new.decoder3, last_channels)
     
-    # Code for remove artifacts
-
-    last_e1_channels = last_down_channels_1
-    last_d1_channels = last_decoder1_channels
-    last_channels = []
-    for i in range(len(last_e1_channels)):
-        last_channels.append(last_e1_channels[i])
-        last_channels.append(last_d1_channels[i] + 64)
-
-    fots_l = list(model.remove_artifacts._modules.items())
-    new_dict_art = {}
-    for i in range(len(fots_l)):
-        module_b = fots_l[i][1]
-        if isinstance(module_b, torch.nn.Conv2d):
-            out_channels = get_out_channel(module_b)
-            new = set_weight_conv_in(last_channels, out_channels, module_b)
-            last_channels = out_channels
-            new_dict_art[fots_l[i][0]] = new
-        elif isinstance(module_b, torch.nn.BatchNorm2d):
-            new = set_bn_in(out_channels, module_b)
-            new_dict_art[fots_l[i][0]] = new
-        elif isinstance(module_b, torch.nn.ReLU):
-            new_dict_art[fots_l[i][0]] = module_b
-
-    model_new.remove_artifacts = nn.Sequential(
-                new_dict_art['0'],
-                new_dict_art['1'],
-                new_dict_art['2'],
-        )
-    last_art_channels = last_channels
+    last_channels = get_merged_channels(last_d3_channels, last_down_channels_3)
+    last_d2_channels = process_decoder(model.decoder2, model_new.decoder2, last_channels)
+    
+    last_channels = get_merged_channels(last_d2_channels, last_down_channels_2)
+    last_d1_channels = process_decoder(model.decoder1, model_new.decoder1, last_channels)
+    
+    last_channels = get_merged_channels(last_d1_channels, last_down_channels_1)
+    last_art_channels = process_decoder(model.remove_artifacts, model_new.remove_artifacts, last_channels)
     
     # Code for final three convs
-    out_channels = get_out_channel(model_new.confidence._modules['0'])
-    new_c = set_weight_conv(last_art_channels, out_channels, model_new.confidence._modules['0'])
-    model_new.confidence = nn.Sequential(new_c)
-    out_channels = get_out_channel(model_new.distances._modules['0'])
-    new_d = set_weight_conv(last_art_channels, out_channels, model_new.distances._modules['0'])
-    model_new.distances = nn.Sequential(new_d)
-    out_channels = get_out_channel(model_new.angle._modules['0'])
-    new_a = set_weight_conv(last_art_channels, out_channels, model_new.angle._modules['0'])
-    model_new.angle = nn.Sequential(new_a)
+    def copy_last_convs(old_layer, target_layer, last_art_channels):
+        out_channels = get_out_channel(old_layer._modules['0'])
+        new_c = set_weight_conv(last_art_channels, out_channels, old_layer._modules['0'])
+        target_layer = nn.Sequential(new_c)
+    
+    
+    copy_last_convs(model.confidence, model_new.confidence, last_art_channels)
+    copy_last_convs(model.distances, model_new.distances, last_art_channels)
+    copy_last_convs(model.angle, model_new.angle, last_art_channels)
     
     model_new.conv1 = nn.Sequential(
             model_new.resnet.conv1,
