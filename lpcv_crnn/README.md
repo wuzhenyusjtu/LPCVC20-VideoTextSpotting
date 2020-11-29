@@ -56,7 +56,8 @@ Prune model
 Load pretrained model, prune it with [NNI](https://github.com/microsoft/nni) and finetune the pruned model. Run the command:
 
 ```sh
-python3 train.py --adadelta --trainRoot /path/to/train/json/file --valRoot /path/to/test/json/file --cuda --expr_dir /path/to/save/dir --prune --pretrained /path/to/pretrained/model (./data/crnn.pth for example) 
+python3 train.py --adadelta --trainRoot /path/to/train/json/file --valRoot /path/to/test/json/file --cuda 
+--expr_dir /path/to/save/dir --prune --pretrained /path/to/pretrained/model (./data/crnn.pth for example) 
 ```
 ```--prune``` parameter is set to do finetuning with ```train.py```. Now we have the pruned model with channels set to 0. To get the real pruned model, we need to prune out all zero-channels and export pruned model.
 
@@ -75,7 +76,8 @@ Finetune the pretrained model with sample dataset
 After we export the pruned model, we need to finetune our model with sample dataset.
 Command:
 ```sh
-python3 train.py --adadelta --trainRoot /path/to/training/sample/crnn/dataset --valRoot /path/to/test/sample/crnn/dataset --cuda --expr_dir /path/to/saved/dir --finetune --pretrained /path/to/exported/model
+python3 train.py --adadelta --trainRoot /path/to/training/sample/crnn/dataset --valRoot /path/to/test/sample/crnn/dataset 
+--cuda --expr_dir /path/to/saved/dir --finetune --pretrained /path/to/exported/model
 ```
 The dataset contains images with labels as their names. The dataset can be found in ```/data/yunhe/sample_bezier_all``` on 64.38.150.214 server. More details can check ```dataset.py``` and ```train.py```. ```--finetune``` parameter is set to do finetuning with ```train.py```.
 
