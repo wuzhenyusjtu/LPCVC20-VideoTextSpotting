@@ -78,6 +78,7 @@ Command:
 ```sh
 python3 finetune.py --adadelta --trainRoot /path/to/training/sample/crnn/dataset --valRoot /path/to/test/sample/crnn/dataset   
 --cuda --expr_dir /path/to/saved/dir --pretrained /path/to/exported/model
+python3 train.py --adadelta --trainRoot ../../../mnt/ramdisk/max/90kDICT32px/train_new.json --valRoot ../../../mnt/ramdisk/max/90kDICT32px/test_new.json --cuda --expr_dir ../../../test_crnn --finetune --pretrained ./prune_export_CRNN.pt
 ```
 The dataset contains images with labels as their names. The dataset can be found in ```/data/yunhe/sample_bezier_all``` on 64.38.150.214 server. More details can check ```dataset.py``` and ```finetune.py```. 
 
