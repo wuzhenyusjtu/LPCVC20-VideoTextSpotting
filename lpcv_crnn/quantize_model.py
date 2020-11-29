@@ -8,145 +8,9 @@ import cv2
 import os
 import nltk
 import argparse
+from models.quantized_crnn import CRNN_q
 
-import torch.nn as nn
-from torch.quantization import QuantStub, DeQuantStub
-import torch
-import copy
-
-class RNN_embedding(nn.Module):
-    def __init__(self, nHidden, nOut):
-        super(RNN_embedding, self).__init__()
-        self.embedding = nn.Linear(nHidden * 2, nOut)
-        self.quant = QuantStub()
-        self.dequant = DeQuantStub()
-    def forward(self, input):
-        input = self.quant(input)
-        output = self.embedding(input)
-        output = self.dequant(output)
-        return output
-    
-
-class BidirectionalLSTM(nn.Module):
-
-    def __init__(self, nIn, nHidden, nOut):
-        super(BidirectionalLSTM, self).__init__()
-
-        self.rnn = nn.LSTM(nIn, nHidden, bidirectional=True)
-        self.embedding = nn.Linear(nHidden * 2, nOut)
-        
-        self.embedding_w = RNN_embedding(nHidden, nOut)
-    
-    def set_wrap(self):
-        self.embedding_w.embedding = copy.deepcopy(self.embedding)
-    
-    def forward(self, input):
-        recurrent, _ = self.rnn(input)
-        T, b, h = recurrent.size()
-        t_rec = recurrent.view(T * b, h)
-        output = self.embedding_w(t_rec)  # [T * b, nOut]
-        output = output.view(T, b, -1)
-        return output
-
-
-class CRNN_q(nn.Module):
-
-    def __init__(self, imgH, nc, nclass, nh, n_rnn=2, leakyRelu=False):
-        super(CRNN_q, self).__init__()
-        assert imgH % 16 == 0, 'imgH has to be a multiple of 16'
-
-        ks = [3, 3, 3, 3, 3, 3, 2]
-        ps = [1, 1, 1, 1, 1, 1, 0]
-        ss = [1, 1, 1, 1, 1, 1, 1]
-#         nm = [64, 128, 256, 256, 512, 512, 512]
-        nm = [64, 128, 128, 77, 154, 77, 77]
-
-        cnn = nn.Sequential()
-
-        def convRelu(i, batchNormalization=False):
-            nIn = nc if i == 0 else nm[i - 1]
-            nOut = nm[i]
-            cnn.add_module('conv{0}'.format(i),
-                           nn.Conv2d(nIn, nOut, ks[i], ss[i], ps[i]))
-            if batchNormalization:
-                cnn.add_module('batchnorm{0}'.format(i), nn.BatchNorm2d(nOut))
-            if leakyRelu:
-                cnn.add_module('relu{0}'.format(i),
-                               nn.LeakyReLU(0.2, inplace=True))
-            else:
-                cnn.add_module('relu{0}'.format(i), nn.ReLU(True))
-
-        convRelu(0)
-        cnn.add_module('pooling{0}'.format(0), nn.MaxPool2d(2, 2))  # 64x16x64
-        convRelu(1)
-        cnn.add_module('pooling{0}'.format(1), nn.MaxPool2d(2, 2))  # 128x8x32
-        convRelu(2, True)
-        convRelu(3)
-        cnn.add_module('pooling{0}'.format(2),
-                       nn.MaxPool2d((2, 2), (2, 1), (0, 1)))  # 256x4x16
-        convRelu(4, True)
-        convRelu(5)
-        cnn.add_module('pooling{0}'.format(3),
-                       nn.MaxPool2d((2, 2), (2, 1), (0, 1)))  # 512x2x16
-        convRelu(6, True)  # 512x1x16
-
-        self.cnn = cnn
-        self.rnn = nn.Sequential(
-            BidirectionalLSTM(nm[-1], nh, nh),
-            BidirectionalLSTM(nh, nh, nclass))
-        
-        self.cnn.quant = QuantStub()
-        self.cnn.dequant = DeQuantStub()
-        
-    def forward(self, input):
-        # conv features
-        input = self.cnn.quant(input)
-        #print(input.dtype)
-        for idx, m in enumerate(self.cnn.children()):
-            if idx > 20:
-                break
-            input = m(input)
-        # conv = self.cnn(input)
-        conv = self.cnn.dequant(input)
-        b, c, h, w = conv.size()
-        assert h == 1, "the height of conv must be 1"
-        conv = conv.squeeze(2)
-        conv = conv.permute(2, 0, 1)  # [w, b, c]
-
-        # rnn features
-        output = self.rnn(conv)
-        
-        return output
-    
-    def fuse_model(self):
-        torch.quantization.fuse_modules(self.cnn, [['conv0', 'relu0'], ['conv1', 'relu1'], ['conv2', 'batchnorm2', 'relu2'],\
-                                              ['conv3', 'relu3'], ['conv4', 'batchnorm4', 'relu4'], ['conv5', 'relu5'],\
-                                              ['conv6', 'batchnorm6', 'relu6']], inplace=True)
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--pruned', required=True, help="path to pruned model (to continue training)")
-parser.add_argument('--expr_dir', required=True, help='Where to store samples and models')
-parser.add_argument('--imagedir', required=True, help='path to sample datasets')
-parser.add_argument('--imgH', type=int, default=32, help='the height of the input image to network')
-parser.add_argument('--imgW', type=int, default=100, help='the width of the input image to network')
-parser.add_argument('--nh', type=int, default=256, help='size of the lstm hidden state')
-# TODO(meijieru): epoch -> iter
-parser.add_argument('--alphabet', type=str, default='0123456789abcdefghijklmnopqrstuvwxyz')
-parser.add_argument('--qconfig', default='fbgemm', help="type of quantization configure (fbgemm or qnnpack)")
-parser.add_argument('--manualSeed', type=int, default=1234, help='reproduce experiemnt')
-parser.add_argument('--random_sample', action='store_true', help='whether to sample the dataset with random sampler')
-opt = parser.parse_args()
-opt.cuda = True
-opt.adadelta = True
-print(opt)
-
-model_path = opt.pruned
-img_path = './data/demo.png'
-alphabet = '0123456789abcdefghijklmnopqrstuvwxyz'
-
-if opt.qconfig not in ['fbgemm', 'qnnpack']:
-    raise NameError('qconfig parameter should be qnnpack or fbgemm')
-
+# New load fucntion for CRNN
 def load_multi(model_path):
     state_dict = torch.load(model_path, map_location='cpu')
     from collections import OrderedDict
@@ -159,45 +23,7 @@ def load_multi(model_path):
         new_state_dict[name] = v
     return new_state_dict
 
-model = CRNN_q(32, 1, 37, 256)
-model.eval()
-model = model.cpu()
-model.load_state_dict(load_multi(model_path), strict=False)
-
-for idx, m in enumerate(model.rnn.children()):
-    m.set_wrap()
-
-model.fuse_model()
-print(model)
-
-qconf = torch.quantization.get_default_qconfig(opt.qconfig)
-model.cnn.qconfig = qconf
-for idx, m in enumerate(model.rnn.children()):
-    m.embedding_w.qconfig = qconf
-
-torch.quantization.prepare(model.cnn, inplace=True)
-for idx, m in enumerate(model.rnn.children()):
-    torch.quantization.prepare(m.embedding_w, inplace=True)
-
-print(model)
-
-converter = utils.strLabelConverter(alphabet)
-transformer = dataset.resizeNormalize((100, 32))
-image = cv2.imread(img_path)
-image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-image = transformer(image)
-image = image.view(1, *image.size())
-image = Variable(image)
-preds = model(image)
-
-_, preds = preds.max(2)
-preds = preds.transpose(1, 0).contiguous().view(-1)
-
-preds_size = Variable(torch.IntTensor([preds.size(0)]))
-raw_pred = converter.decode(preds.data, preds_size.data, raw=True)
-sim_pred = converter.decode(preds.data, preds_size.data, raw=False)
-# print('%-20s => %-20s' % (raw_pred, sim_pred))
-
+# Get CRNN results by giving a directory containing images/data.
 def get_crnn_res(model, image_dir, converter, transformer):
     total_dist = 0
     total_cnt = 0
@@ -230,15 +56,80 @@ def get_crnn_res(model, image_dir, converter, transformer):
         
     return total_dist, total_cnt
 
-image_dir = opt.imagedir
-get_crnn_res(model, image_dir, converter, transformer)
+if __name__ == '__main__':
 
-torch.quantization.convert(model.cnn, inplace=True)
-for idx, m in enumerate(model.rnn.children()):
-    torch.quantization.convert(m.embedding_w, inplace=True)
-print(model)
-torch.jit.save(torch.jit.script(model.cnn), '{}/cnn_CRNN_{}.torchscript'.format(opt.expr_dir, opt.qconfig))
-print("cnn part is saved to {}/cnn_CRNN_{}.torchscript".format(opt.expr_dir, opt.qconfig))
-for idx, m in enumerate(model.rnn.children()):
-    torch.jit.save(torch.jit.script(m.embedding_w), '{}/embd_w{}_CRNN_{}.torchscript'.format(opt.expr_dir, idx, opt.qconfig))
-    print("embedding part {} is saved to {}/embd_w{}_CRNN_{}.torchscript".format(idx,opt.expr_dir, idx, opt.qconfig ))
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--pruned', required=True, help="path to pruned model (to continue training)")
+    parser.add_argument('--expr_dir', required=True, help='Where to store samples and models')
+#     parser.add_argument('--imagedir', required=True, help='path to sample datasets')
+    parser.add_argument('--imgH', type=int, default=32, help='the height of the input image to network')
+    parser.add_argument('--imgW', type=int, default=100, help='the width of the input image to network')
+    parser.add_argument('--nh', type=int, default=256, help='size of the lstm hidden state')
+    # TODO(meijieru): epoch -> iter
+    parser.add_argument('--alphabet', type=str, default='0123456789abcdefghijklmnopqrstuvwxyz')
+    parser.add_argument('--qconfig', default='fbgemm', help="type of quantization configure (fbgemm or qnnpack)")
+    parser.add_argument('--manualSeed', type=int, default=1234, help='reproduce experiemnt')
+    parser.add_argument('--random_sample', action='store_true', help='whether to sample the dataset with random sampler')
+    opt = parser.parse_args()
+    opt.cuda = True
+    opt.adadelta = True
+    print(opt)
+
+    model_path = opt.pruned
+    img_path = './data/demo.png'
+    alphabet = '0123456789abcdefghijklmnopqrstuvwxyz'
+
+    if opt.qconfig not in ['fbgemm', 'qnnpack']:
+        raise NameError('qconfig parameter should be qnnpack or fbgemm')
+
+    model = CRNN_q(32, 1, 37, 256)
+    model.eval()
+    model = model.cpu()
+    model.load_state_dict(load_multi(model_path), strict=False)
+
+    for idx, m in enumerate(model.rnn.children()):
+        m.set_wrap()
+
+    model.fuse_model()
+    print(model)
+
+    qconf = torch.quantization.get_default_qconfig(opt.qconfig)
+    model.cnn.qconfig = qconf
+    for idx, m in enumerate(model.rnn.children()):
+        m.embedding_w.qconfig = qconf
+
+    torch.quantization.prepare(model.cnn, inplace=True)
+    for idx, m in enumerate(model.rnn.children()):
+        torch.quantization.prepare(m.embedding_w, inplace=True)
+
+    print(model)
+
+    converter = utils.strLabelConverter(alphabet)
+    transformer = dataset.resizeNormalize((100, 32))
+    image = cv2.imread(img_path)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    image = transformer(image)
+    image = image.view(1, *image.size())
+    image = Variable(image)
+    preds = model(image)
+
+    _, preds = preds.max(2)
+    preds = preds.transpose(1, 0).contiguous().view(-1)
+
+    preds_size = Variable(torch.IntTensor([preds.size(0)]))
+    raw_pred = converter.decode(preds.data, preds_size.data, raw=True)
+    sim_pred = converter.decode(preds.data, preds_size.data, raw=False)
+    # print('%-20s => %-20s' % (raw_pred, sim_pred))
+
+#     image_dir = opt.imagedir
+#     get_crnn_res(model, image_dir, converter, transformer)
+
+    torch.quantization.convert(model.cnn, inplace=True)
+    for idx, m in enumerate(model.rnn.children()):
+        torch.quantization.convert(m.embedding_w, inplace=True)
+    print(model)
+    torch.jit.save(torch.jit.script(model.cnn), '{}/cnn_CRNN_{}.torchscript'.format(opt.expr_dir, opt.qconfig))
+    print("cnn part is saved to {}/cnn_CRNN_{}.torchscript".format(opt.expr_dir, opt.qconfig))
+    for idx, m in enumerate(model.rnn.children()):
+        torch.jit.save(torch.jit.script(m.embedding_w), '{}/embd_w{}_CRNN_{}.torchscript'.format(opt.expr_dir, idx, opt.qconfig))
+        print("embedding part {} is saved to {}/embd_w{}_CRNN_{}.torchscript".format(idx,opt.expr_dir, idx, opt.qconfig ))
