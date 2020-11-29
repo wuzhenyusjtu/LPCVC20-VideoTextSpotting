@@ -57,6 +57,7 @@ Load pretrained model, prune it with [NNI](https://github.com/microsoft/nni) and
 
 ```sh
 python3 prune_model.py --save-dir /path/to/save/dir --pretrained /path/to/pretrained/model (./data/crnn.pth for example) 
+python3 train_new.py --adadelta --trainRoot ../../../mnt/ramdisk/max/90kDICT32px/train_new.json --valRoot ../../../mnt/ramdisk/max/90kDICT32px/test_new.json --cuda --expr_dir ../../../test_crnn --prune --pretrained /home/yunhexue/nni_crnn_results/base_train_adadelta/netCRNN_10_2800.pth 
 ```
 Now we have the pruned model with channels set to 0. To get the real pruned model, we need to prune out all zero-channels and export pruned model.
 
