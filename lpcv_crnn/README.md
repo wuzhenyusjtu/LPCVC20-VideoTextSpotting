@@ -56,10 +56,9 @@ Prune model
 Load pretrained model, prune it with [NNI](https://github.com/microsoft/nni) and finetune the pruned model. Run the command:
 
 ```sh
-python3 prune_model.py --save-dir /path/to/save/dir --pretrained /path/to/pretrained/model (./data/crnn.pth for example) 
-python3 train_new.py --adadelta --trainRoot ../../../mnt/ramdisk/max/90kDICT32px/train_new.json --valRoot ../../../mnt/ramdisk/max/90kDICT32px/test_new.json --cuda --expr_dir ../../../test_crnn --prune --pretrained /home/yunhexue/nni_crnn_results/base_train_adadelta/netCRNN_10_2800.pth 
+python3 train.py --adadelta --trainRoot /path/to/train/json/file --valRoot /path/to/test/json/file --cuda --expr_dir /path/to/save/dir --prune --pretrained /path/to/pretrained/model (./data/crnn.pth for example) 
 ```
-Now we have the pruned model with channels set to 0. To get the real pruned model, we need to prune out all zero-channels and export pruned model.
+```--prune``` parameter is set to do finetuning with ```train.py```. Now we have the pruned model with channels set to 0. To get the real pruned model, we need to prune out all zero-channels and export pruned model.
 
 Export pruned model
 -----------------
@@ -67,7 +66,7 @@ Export pruned model
 Export the pruned model by running command: (More information please check export_prune_mode.py)
 
 ```sh
-python3 export_prune_mode.py  --pretrained /path/to/pruned/model --expr_dir /path/to/save/dir
+python3 export_crnn.py  --pretrained /path/to/pruned/model --expr_dir /path/to/save/dir
 ```
 Then you have a pruned model with lighter architecture at the target directory.
 
@@ -76,11 +75,9 @@ Finetune the pretrained model with sample dataset
 After we export the pruned model, we need to finetune our model with sample dataset.
 Command:
 ```sh
-python3 finetune.py --adadelta --trainRoot /path/to/training/sample/crnn/dataset --valRoot /path/to/test/sample/crnn/dataset   
---cuda --expr_dir /path/to/saved/dir --pretrained /path/to/exported/model
-python3 train.py --adadelta --trainRoot ../../../mnt/ramdisk/max/90kDICT32px/train_new.json --valRoot ../../../mnt/ramdisk/max/90kDICT32px/test_new.json --cuda --expr_dir ../../../test_crnn --finetune --pretrained ./prune_export_CRNN.pt
+python3 train.py --adadelta --trainRoot /path/to/training/sample/crnn/dataset --valRoot /path/to/test/sample/crnn/dataset --cuda --expr_dir /path/to/saved/dir --finetune --pretrained /path/to/exported/model
 ```
-The dataset contains images with labels as their names. The dataset can be found in ```/data/yunhe/sample_bezier_all``` on 64.38.150.214 server. More details can check ```dataset.py``` and ```finetune.py```. 
+The dataset contains images with labels as their names. The dataset can be found in ```/data/yunhe/sample_bezier_all``` on 64.38.150.214 server. More details can check ```dataset.py``` and ```train.py```. ```--finetune``` parameter is set to do finetuning with ```train.py```.
 
 Quantize pruned model
 -----------------
