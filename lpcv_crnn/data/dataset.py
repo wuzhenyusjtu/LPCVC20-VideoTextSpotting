@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import Dataset
 from torch.utils.data import sampler
 import torchvision.transforms as transforms
-# import lmdb
+import lmdb
 import six
 import sys
 from PIL import Image
@@ -14,6 +14,8 @@ import numpy as np
 import cv2
 import os
 import random
+import json
+
 
 class SampleDataset(Dataset):
 
@@ -40,6 +42,7 @@ class SampleDataset(Dataset):
         label = str(img_name.split(':')[0]).translate(self.trans_table).lower()
 #         label = str(img_name.split(':')[0])
         return (img, label)
+
 
 class SynthDataset(Dataset):
 
@@ -71,7 +74,6 @@ class SynthDataset(Dataset):
         label = str(img_name.split('`')[0])
         return (img, label)
 
-import json
 
 class MJDataset(Dataset):
 
@@ -108,31 +110,6 @@ class MJDataset(Dataset):
     
 # class MJDataset(Dataset):
 
-#     def __init__(self, jsonpath=None, transform=None, target_transform=None):
-        
-#         self.jsonpath = jsonpath
-#         with open(self.jsonpath, 'r') as file:
-#             self.path_list = json.load(file)
-#         self.transform = transform
-#         self.target_transform = target_transform
-        
-#     def __len__(self):
-#         return len(self.path_list)
-
-#     def __getitem__(self, index):
-#         img_name = self.path_list[index]
-#         try:
-#             img = cv2.imread(img_name)
-#             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-#         except:
-#             print('{} error',format(img_name))
-#             return self.__getitem__(random.randint(0, len(self.path_list)))
-        
-# #         print('{} been used'.format(img_name))
-#         if self.transform is not None:
-#             img = self.transform(img)
-#         label = os.path.basename(img_name.split('_')[1])
-#         return (img, label)    
 
 class lmdbDataset(Dataset):
 

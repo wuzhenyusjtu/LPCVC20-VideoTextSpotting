@@ -148,3 +148,37 @@ def assureRatio(img):
         main = nn.UpsamplingBilinear2d(size=(h, h), scale_factor=None)
         img = main(img)
     return img
+
+
+def weights_init(m):
+    """
+    Initialize model
+    Args:
+    m: model to be initialized
+    """
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        m.weight.data.normal_(0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        m.weight.data.normal_(1.0, 0.02)
+        m.bias.data.fill_(0)
+
+
+def load_multi(model_path):
+    """
+    Load model from model trained with DP (multi GPUs)
+
+    Args:
+        model_path: path to the weight of the model
+
+    Returns:
+        A new state dicts copied from the weight of the model.
+    """
+    state_dict = torch.load(model_path, map_location='cpu')
+    from collections import OrderedDict
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k[7:]
+        new_state_dict[name] = v
+    return new_state_dict
+

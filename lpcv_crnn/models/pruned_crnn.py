@@ -1,6 +1,4 @@
 import torch.nn as nn
-from torch.quantization import QuantStub, DeQuantStub
-import torch
 from models.crnn import BidirectionalLSTM
 
 class CRNN_pruned(nn.Module):

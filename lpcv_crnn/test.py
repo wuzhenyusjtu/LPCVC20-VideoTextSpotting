@@ -1,15 +1,15 @@
 import torch
 from torch.autograd import Variable
-import utils
+import misc
 import dataset
 from PIL import Image
 import time
+import torch.nn as nn
 
 import models.crnn as crnn
 
 
 model_path = './data/crnn.pth'
-#model_path = './temp.p'
 img_path = './data/demo.png'
 alphabet = '0123456789abcdefghijklmnopqrstuvwxyz'
 
@@ -20,7 +20,7 @@ model = model.cpu()
 print('loading pretrained model from %s' % model_path)
 model.load_state_dict(torch.load(model_path))
 
-converter = utils.strLabelConverter(alphabet)
+converter = misc.strLabelConverter(alphabet)
 
 transformer = dataset.resizeNormalize((100, 32))
 image = Image.open(img_path).convert('L')
@@ -47,7 +47,7 @@ dyn_q_model = torch.quantization.quantize_dynamic(
     model, {nn.Conv2d, nn.BatchNorm2d, nn.ReLU, nn.LSTM, nn.Linear}, dtype=torch.qint8
 )
 
-converter = utils.strLabelConverter(alphabet)
+converter = misc.strLabelConverter(alphabet)
 
 transformer = dataset.resizeNormalize((100, 32))
 image = Image.open(img_path).convert('L')

@@ -4,19 +4,15 @@ from __future__ import division
 
 import argparse
 import random
-import torch
-import torch.backends.cudnn as cudnn
-import torch.optim as optim
 import torch.utils.data
 import torch.nn as nn
-from torch.autograd import Variable
 import numpy as np
 import os
-import utils
+from utils import misc
 import dataset
 
 from models.crnn import CRNN
-from train import load_multi
+from utils.misc import load_multi
 
 import copy
 
@@ -95,7 +91,7 @@ if __name__ == '__main__':
     nclass = len(opt.alphabet) + 1
     nc = 1
 
-    converter = utils.strLabelConverter(opt.alphabet)
+    converter = misc.strLabelConverter(opt.alphabet)
 
     crnn = CRNN(opt.imgH, nc, nclass, opt.nh)
     if opt.pretrained != '':

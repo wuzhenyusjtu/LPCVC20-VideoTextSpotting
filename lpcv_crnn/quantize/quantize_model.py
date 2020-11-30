@@ -1,6 +1,6 @@
 import torch
 from torch.autograd import Variable
-import utils
+from utils import misc
 import dataset
 from PIL import Image
 import time
@@ -8,7 +8,7 @@ import cv2
 import os
 import nltk
 import argparse
-from models.quantized_crnn import CRNN_q
+from models.quantized_crnn import CRNN_quanted
 
 # New load fucntion for CRNN
 def load_multi(model_path):
@@ -82,7 +82,7 @@ if __name__ == '__main__':
     if opt.qconfig not in ['fbgemm', 'qnnpack']:
         raise NameError('qconfig parameter should be qnnpack or fbgemm')
 
-    model = CRNN_q(32, 1, 37, 256)
+    model = CRNN_quanted(32, 1, 37, 256)
     model.eval()
     model = model.cpu()
     model.load_state_dict(load_multi(model_path), strict=False)
@@ -104,7 +104,7 @@ if __name__ == '__main__':
 
     print(model)
 
-    converter = utils.strLabelConverter(alphabet)
+    converter = misc.strLabelConverter(alphabet)
     transformer = dataset.resizeNormalize((100, 32))
     image = cv2.imread(img_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)

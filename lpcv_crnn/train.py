@@ -7,27 +7,25 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.optim as optim
 import torch.utils.data
-from torch.autograd import Variable
 import numpy as np
 from warpctc_pytorch import CTCLoss
 import os
-import utils
-import dataset
+import misc
+from data import dataset
 
-import models.crnn as crnn
-import copy
-
-# from crnn_prune import CRNN as CRNN_p
 import logging
 import warnings
 warnings.filterwarnings("ignore")
 
 # Dependencies for pruning
 from nni.compression.torch import L1FilterPruner, ADMMPruner
-import time
 
 # Dependencies for finetuning
-from models.pruned_crnn import CRNN_pruned as CRNN_p
+from models.pruned_crnn import CRNN_pruned
+from models.crnn import CRNN
+
+from utils.train_utils import train_one_epoch
+
 '''
 Function for logger
 '''
@@ -49,149 +47,9 @@ def get_logger(filename, verbosity=1, name=None):
 
     return logger
 
-'''
-Initialize model
 
-Args:
-    m: model to be initialized
-'''
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        m.weight.data.normal_(0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        m.weight.data.normal_(1.0, 0.02)
-        m.bias.data.fill_(0)
-        
-'''
-Load model from model trained with DP (multi GPUs)
 
-Args:
-    model_path: path to the weight of the model
 
-Returns:
-    A new state dicts copied from the weight of the model.
-'''
-def load_multi(model_path):
-    state_dict = torch.load(model_path, map_location='cpu')
-    from collections import OrderedDict
-    new_state_dict = OrderedDict()
-    for k, v in state_dict.items():
-        name = k[7:]
-        new_state_dict[name] = v
-    return new_state_dict
-
-# Function for validation
-def val(net, dataset, criterion, logger=None, max_iter=100):
-    if logger:
-        logger.info('Start val')
-    else:
-        print('Start val')
-
-    for p in crnn.parameters():
-        p.requires_grad = False
-
-    net.eval()
-    data_loader = torch.utils.data.DataLoader(
-        dataset, shuffle=True, batch_size=opt.batchSize, num_workers=int(opt.workers))
-    val_iter = iter(data_loader)
-
-    i = 0
-    n_correct = 0
-    loss_avg = utils.averager()
-
-    max_iter = min(max_iter, len(data_loader))
-    for i in range(max_iter):
-        data = val_iter.next()
-        i += 1
-        cpu_images, cpu_texts = data
-        batch_size = cpu_images.size(0)
-        utils.loadData(image, cpu_images)
-        t, l = converter.encode(cpu_texts)
-        utils.loadData(text, t)
-        utils.loadData(length, l)
-
-        preds = crnn(image)
-        preds_size = Variable(torch.IntTensor([preds.size(0)] * batch_size))
-        cost = criterion(preds, text, preds_size, length) / batch_size
-        loss_avg.add(cost)
-
-        _, preds = preds.max(2)
-        preds = preds.transpose(1, 0).contiguous().view(-1)
-        sim_preds = converter.decode(preds.data, preds_size.data, raw=False)
-        for pred, target in zip(sim_preds, cpu_texts):
-            if pred == target.lower():
-                n_correct += 1
-
-    raw_preds = converter.decode(preds.data, preds_size.data, raw=True)[:opt.n_test_disp]
-    for raw_pred, pred, gt in zip(raw_preds, sim_preds, cpu_texts):
-        if logger:
-            logger.info('%-20s => %-20s, gt: %-20s' % (raw_pred, pred, gt))
-        else:
-            print('%-20s => %-20s, gt: %-20s' % (raw_pred, pred, gt))
-
-    accuracy = n_correct / float(max_iter * opt.batchSize)
-    if logger:
-        logger.info('Test loss: %f, accuray: %f' % (loss_avg.val(), accuracy))
-    else:
-        print('Test loss: %f, accuray: %f' % (loss_avg.val(), accuracy))
-
-# Function for training one batch
-def trainBatch(net, criterion, optimizer, train_iter):
-    data = train_iter.next()
-    cpu_images, cpu_texts = data
-    batch_size = cpu_images.size(0)
-    utils.loadData(image, cpu_images)
-    t, l = converter.encode(cpu_texts)
-    utils.loadData(text, t)
-    utils.loadData(length, l)
-
-    preds = crnn(image)
-    preds_size = Variable(torch.IntTensor([preds.size(0)] * batch_size))
-    cost = criterion(preds, text, preds_size, length) / batch_size
-    crnn.zero_grad()
-    cost.backward()
-    optimizer.step()
-    return cost
-
-# Train one epoch
-def train(crnn, train_loader, criterion, optimizer, epoch, opt, logger=None, callback=None):
-    train_iter = iter(train_loader)
-    i = 0
-#     print("Start CRNN training.")
-    while i < len(train_loader):
-        for p in crnn.parameters():
-            p.requires_grad = True
-        crnn.train()
-
-        cost = trainBatch(crnn, criterion, optimizer, train_iter)
-        loss_avg.add(cost)
-        i += 1
-        if i % opt.displayInterval == 0:
-            if logger:
-                logger.info('[%d/%d][%d/%d] Loss: %f' %
-                      (epoch, opt.nepoch, i, len(train_loader), loss_avg.val()))
-            else:
-                print('[%d/%d][%d/%d] Loss: %f' %
-                      (epoch, opt.nepoch, i, len(train_loader), loss_avg.val()))
-            loss_avg.reset()
-
-        if i % opt.valInterval == 0:
-            val(crnn, test_dataset, criterion, logger=logger)
-
-        # do checkpointing
-        if i % opt.saveInterval == 0:
-            torch.save(
-                crnn.state_dict(), '{}/netCRNN_{}_{}.pth'.format(opt.expr_dir, epoch, i))
-            if logger:
-                logger.info("Model saved to {}/netCRNN_{}_{}.pth".format(opt.expr_dir, epoch, i))
-            else:
-                print("Model saved to {}/netCRNN_{}_{}.pth".format(opt.expr_dir, epoch, i))
-        
-# Trainer function for pruning
-def trainer(model, criterion, optimizer, epoch, callback):
-    return train(model, criterion_c, optimizer, epoch, opt, callback)
-        
 if __name__=='__main__':
     ''' 
     # Parse the arguments
@@ -202,8 +60,8 @@ if __name__=='__main__':
     # saveInterval: Set how many intervals after we save the model
     '''
     parser = argparse.ArgumentParser()
-    parser.add_argument('--trainRoot', required=True, help='path to dataset')
-    parser.add_argument('--valRoot', required=True, help='path to dataset')
+    parser.add_argument('--trainRoot', required=True, help='path to dataset for training')
+    parser.add_argument('--valRoot', required=True, help='path to dataset for validation')
     # Set pretrain or finetune
     parser.add_argument('--ft', action='store_true', help='set finetune as true means use sample dataset to finetune the model')
     parser.add_argument('--workers', type=int, help='number of data loading workers', default=8)
@@ -275,18 +133,21 @@ if __name__=='__main__':
         train_dataset, batch_size=opt.batchSize,
         shuffle=True, num_workers=int(opt.workers),
         collate_fn=dataset.alignCollate(imgH=opt.imgH, imgW=opt.imgW, keep_ratio=opt.keep_ratio))
+    val_loader = torch.utils.data.DataLoader(
+        test_dataset, batch_size=opt.batchSize,
+        shuffle=False, num_workers=int(opt.workers))
 
     nclass = len(opt.alphabet) + 1
     nc = 1
 
-    converter = utils.strLabelConverter(opt.alphabet)
+    converter = misc.strLabelConverter(opt.alphabet)
     criterion = CTCLoss()
     
     if opt.finetune:
-        crnn = CRNN_p(opt.imgH, nc, nclass, opt.nh)
+        crnn = CRNN_pruned(opt.imgH, nc, nclass, opt.nh)
     else:
-        crnn = crnn.CRNN(opt.imgH, nc, nclass, opt.nh)
-    crnn.apply(weights_init)
+        crnn = CRNN(opt.imgH, nc, nclass, opt.nh)
+    crnn.apply(misc.weights_init)
 
     if opt.pretrained != '':
         if logger:
@@ -295,33 +156,20 @@ if __name__=='__main__':
             logger.info('loading pretrained model from %s' % opt.pretrained)
         
         if not opt.finetune:
-            crnn.load_state_dict(load_multi(opt.pretrained), strict=True)
+            crnn.load_state_dict(misc.load_multi(opt.pretrained), strict=True)
         else:
             crnn.load_state_dict(torch.load(opt.pretrained), strict=True)
     
     logger.info(crnn)
 
-    image = torch.FloatTensor(opt.batchSize, 3, opt.imgH, opt.imgH)
-    text = torch.IntTensor(opt.batchSize * 5)
-    length = torch.IntTensor(opt.batchSize)
-
     if opt.cuda:
         crnn.cuda()
         crnn = torch.nn.DataParallel(crnn, device_ids=range(opt.ngpu))
-        image = image.cuda()
         criterion = criterion.cuda()
-
-    image = Variable(image)
-    text = Variable(text)
-    length = Variable(length)
-
-    # loss averager
-    loss_avg = utils.averager()
 
     # setup optimizer
     if opt.adam:
-        optimizer = optim.Adam(crnn.parameters(), lr=opt.lr,
-                               betas=(opt.beta1, 0.999))
+        optimizer = optim.Adam(crnn.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
     elif opt.adadelta:
         optimizer = optim.Adadelta(crnn.parameters())
     else:
@@ -347,9 +195,9 @@ if __name__=='__main__':
                 logger.info('# Epoch {} #'.format(epoch))
             else:
                 print('# Epoch {} #'.format(epoch))
-            train(crnn, train_loader, criterion, optimizer, epoch, opt, logger, callback=None)
+            train_one_epoch(crnn, train_loader, val_loader, criterion, optimizer, converter, epoch, opt, logger, callback=None)
             pruner.export_model(model_path='{}/pruned_fots{}.pth'.format(opt.expr_dir, epoch), \
                                 mask_path='{}/mask_fots{}.pth'.format(opt.expr_dir, epoch))
         # Train the model from scratch
         else:
-            train(crnn, train_loader, criterion, optimizer, epoch, opt, logger, callback=None)
+            train_one_epoch(crnn, train_loader, val_loader, criterion, optimizer, converter, epoch, opt, logger, callback=None)

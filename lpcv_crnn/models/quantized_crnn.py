@@ -38,10 +38,10 @@ class BidirectionalLSTM(nn.Module):
         output = output.view(T, b, -1)
         return output
     
-class CRNN_q(CRNN_pruned):
+class CRNN_quanted(CRNN_pruned):
 
     def __init__(self, imgH, nc, nclass, nh, n_rnn=2, leakyRelu=False):
-        super(CRNN_q, self).__init__(imgH, nc, nclass, nh, n_rnn, leakyRelu)
+        super(CRNN_quanted, self).__init__(imgH, nc, nclass, nh, n_rnn, leakyRelu)
         
         self.rnn = nn.Sequential(
             BidirectionalLSTM(self.nm[-1], nh, nh),
