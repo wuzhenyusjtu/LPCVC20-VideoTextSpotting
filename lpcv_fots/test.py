@@ -9,18 +9,14 @@ import torch
 import torch.utils.data
 import tqdm
 
-import sys 
-sys.path.append("..") 
+# import sys
+# sys.path.append("..")
 
-
-from standard import datasets
-from standard.model import FOTSModel
-from prune.model_pruned import FOTSModel_pruned
-from modules.parse_polys import parse_polys
+from data import datasets
 from utils.train_utils import load_multi, restore_checkpoint, fill_ohem_mask, detection_loss
 
 # Train and validate the model
-def val(model, loss_func, opt, max_batches_per_iter_cnt, valid_dl):
+def val_one_epoch(model, loss_func, opt, max_batches_per_iter_cnt, val_loader):
     batch_per_iter_cnt = 0
     test_loss_stats = 0.0
     loss_count_stats = 0
@@ -29,7 +25,7 @@ def val(model, loss_func, opt, max_batches_per_iter_cnt, valid_dl):
     with torch.no_grad():
         val_loss = 0.0
         val_loss_count = 0
-        pbar = tqdm.tqdm(valid_dl, 'Val result: ', ncols=80)
+        pbar = tqdm.tqdm(val_loader, 'Val result: ', ncols=80)
         loss_count_stats = 0
         cnt_error = 0
         for cropped, classification, regression, thetas, training_mask in pbar:
@@ -66,13 +62,13 @@ if __name__ == '__main__':
     
     # Get dataloaders
     data_set_val = datasets.SampleDataset(args.test_folder_sample, datasets.transform, train=False)
-    dl_val = torch.utils.data.DataLoader(data_set_val, batch_size=1, shuffle=True,
+    val_loader = torch.utils.data.DataLoader(data_set_val, batch_size=1, shuffle=True,
                                          sampler=None, batch_sampler=None, num_workers=args.num_workers)  
     
     epoch, model, optimizer, lr_scheduler, best_score = restore_checkpoint(True, args.pretrain_model, args.prune)
     if args.ngpus > 1:
         print('Use parallel')
         model = torch.nn.DataParallel(model)
-    val(model, detection_loss, optimizer, args.batches_before_train, dl_val)
+    val_one_epoch(model, detection_loss, optimizer, args.batches_before_train, val_loader)
 
-#     val(model, loss_func, opt, max_batches_per_iter_cnt, valid_dl)
+#     val_one_epoch(model, loss_func, opt, max_batches_per_iter_cnt, val_loader)

@@ -2,14 +2,10 @@
 import sys 
 sys.path.append("..") 
 
-import torch
-from utils.train_utils import load_multi
-from standard.model import FOTSModel
+
+from models.fots import FOTS
 import argparse
 
-import cv2
-import numpy as np
-import os
 import torch
 import torch.utils.data
 
@@ -91,7 +87,7 @@ if __name__ == '__main__':
     parser.add_argument('--prune-model', type=str, default=None, help='Pretrained model name in save dir')
     args = parser.parse_args()
     
-    model = FOTSModel().to(torch.device("cpu"))
+    model = FOTS().to(torch.device("cpu"))
     model = model.eval()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
     lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=32, \
@@ -106,7 +102,7 @@ if __name__ == '__main__':
     
     last_channels = [0, 1, 2]
 
-    model_new = FOTSModel().to(torch.device("cpu"))
+    model_new = FOTS().to(torch.device("cpu"))
     model_new = model.eval()
     model_new = copy.deepcopy(model)
     new_dict = {}

@@ -3,193 +3,20 @@ import sys
 sys.path.append("..") 
 
 import argparse
-import math
 
 import cv2
 import numpy as np
-import numpy.random as nprnd
 import os
 import torch
-import torch.nn as nn
 import torch.utils.data
-import torch.nn.functional as F
 import tqdm
 
-import standard.datasets as datasets
-from standard.model import FOTSModel
-from modules.parse_polys import parse_polys
-
-from collections import OrderedDict
-from model_q import qresnet34
-from utils.train_utils import load_multi
+from models.quanted_fots import FOTS_quanted
 
 import sys 
 sys.path.append("..") 
-from standard.model import conv, Decoder
 
-'''
-Class for Quantizeable FOTs model. Some details:
-- Original FOTs model forward process can be found in FOTSModel in standard.model
-- Adding early exit module into FOTs model:
-    -- Early exit module uses the results of encoder2 layer as inputs. If the early exit modules judges that the process need to go on, then it means that the whole FOTs model needs to go on and the results of both encoder1 and encoder2 should be passed to encoder3 and the later on layers.
-    -- Problem: Quantized model is as a whole. It cannot deal with the if-else branch operations.
-    -- Solution: Devide whole model into three parts:
-        Part1: Encoder1 and layers before.
-        Part2: Encoder2.
-        Part3: Encoder3 and layers after.
-        Rejector: Early exit module
-        So that we can quantize these three parts separately and get intermediate results for early exit module.
-- Method fuse_conv（）can fuse conv+bn+relu layers into one layer for future model quantization.
-- Method fuse_model() fuse all modules in FOTs model.
-'''
-class FOTSModel_q(nn.Module):
-    def __init__(self, crop_height=640):
-        super().__init__()
-        self.crop_height = crop_height
-        self.resnet = qresnet34(pretrained=False)
-        self.conv1 = nn.Sequential(
-            self.resnet.conv1,
-            self.resnet.bn1,
-            self.resnet.relu,
-        )  # 64
-        self.encoder1 = self.resnet.layer1  # 64
-        self.encoder2 = self.resnet.layer2  # 128
-        self.encoder3 = self.resnet.layer3  # 256
-        self.encoder4 = self.resnet.layer4
-        
-        self.center = nn.Sequential(
-            conv(256, 256, stride=2),
-            conv(256, 512)
-        )
-        self.decoder4 = Decoder(512, 256)
-        self.decoder3 = Decoder(512, 128)
-        self.decoder2 = Decoder(256, 64)
-        self.decoder1 = Decoder(128, 32)
-        self.remove_artifacts = conv(64, 64)
-        
-        self.confidence = conv(64, 1, kernel_size=1, padding=0, bn=False, relu=False)
-        self.distances = conv(64, 4, kernel_size=1, padding=0, bn=False, relu=False)
-        self.angle = conv(64, 1, kernel_size=1, padding=0, bn=False, relu=False)
-        
-        self.quant = torch.quantization.QuantStub()
-        self.dequant = torch.quantization.DeQuantStub()
-        
-        # self.dequant_op = nn.quantized.DeQuantize()
-    
-        # Code for early exit
-        
-        self.avgpool = nn.AdaptiveAvgPool2d((1,1))
-        self.fc = nn.Linear(64, 1)
-        self.init_fc(self.fc)
-        self.down_conv = conv(64, 64, kernel_size=3, stride=4)
-        self.last_conv = nn.Conv2d(64, 64, 1)
-        self.sigm = nn.Sigmoid()
-        
-        self.rejector = nn.Sequential(OrderedDict([
-            ('r1', torch.quantization.QuantStub()),
-            ('r2', self.last_conv),
-            ('r3', nn.MaxPool2d(2, stride=2)),
-            ('r4', self.down_conv),
-            ('r5', self.avgpool),
-            ('r6', nn.Flatten()),
-            ('r7', torch.quantization.DeQuantStub()),
-        ]))
-        
-        self.part1 = nn.Sequential(OrderedDict([
-            ('r1', torch.quantization.QuantStub()),
-            ('r2', self.conv1),
-            ('r3', nn.MaxPool2d(2, stride=2)),
-            ('r4', self.encoder1),
-            ('r5', torch.quantization.DeQuantStub()),
-        ]))
-        self.part2 = nn.Sequential(OrderedDict([
-            ('r1', torch.quantization.QuantStub()),
-            ('r2', self.encoder2),
-            ('r3', torch.quantization.DeQuantStub()),
-        ]))
-        self.part3 = Part3(self.encoder3, self.encoder4, self.center, self.decoder4, self.decoder3, self.decoder2, \
-                           self.decoder1, self.remove_artifacts,  self.confidence, self.distances, self.angle, self.crop_height)
-        
-    def init_fc(self, fc):
-        torch.nn.init.normal_(fc.weight, mean=0, std=1)
-        torch.nn.init.normal_(fc.bias, mean=0, std=1)
-    
-    def fuse_conv(self, model):
-        torch.quantization.fuse_modules(model, ['0', '1', '2'], inplace=True)
-        
-    def fuse_model(self):
-        self.fuse_conv(self.conv1)
-        self.resnet.fuse_model()
-        for child in self.center.children():
-            self.fuse_conv(child)
-        self.fuse_conv(self.decoder1.squeeze)
-        self.fuse_conv(self.decoder2.squeeze)
-        self.fuse_conv(self.decoder3.squeeze)
-        self.fuse_conv(self.decoder4.squeeze)
-        self.fuse_conv(self.remove_artifacts)
-        self.fuse_conv(self.rejector.r4)
-        
-    def forward(self, x):
-        e1 = self.part1(x)
-        e2 = self.part2(e1)
-        # Code for early exit
-        x = self.rejector(e2)
-        x = self.fc(x)
-        x = self.sigm(x)
-        if x < 0.5:
-            return None, None, None
-        confidence, distances, angle = self.part3(e1, e2)
-        return confidence, distances, angle
 
-'''
-All modules come from the encoder3 layer and layers afterwards from the FOTs model.
-Integrate all modules into one class called Part3.
-'''
-class Part3(nn.Module):
-    def __init__(self, encoder3, encoder4, center, decoder4, decoder3, decoder2, decoder1, remove_artifacts, \
-                confidence, distances, angle, crop_height):
-        super(Part3, self).__init__()
-        self.encoder3 = encoder3
-        self.encoder4 = encoder4
-        self.center = center
-        self.decoder4 = decoder4
-        self.decoder3 = decoder3
-        self.decoder2 = decoder2
-        self.decoder1 = decoder1
-        self.remove_artifacts = remove_artifacts
-        self.confidence = confidence
-        self.distances = distances
-        self.angle = angle
-        self.crop_height = crop_height
-        
-        self.quant = torch.quantization.QuantStub()
-        self.dequant = torch.quantization.DeQuantStub()
-    
-    def forward(self, e1, e2):
-        e1 = self.quant(e1)
-        e2 = self.quant(e2)
-        e3 = self.encoder3(e2)
-        e4 = self.encoder4(e3)
-        f = self.center(e4)
-
-        d4 = self.decoder4(f, e4)
-        d3 = self.decoder3(d4, e3)
-        d2 = self.decoder2(d3, e2)
-        d1 = self.decoder1(d2, e1)
-
-        final = self.remove_artifacts(d1)
-
-        confidence = self.confidence(final)
-        distances = self.distances(final)
-        distances = self.dequant(distances)
-        final = self.dequant(final)
-        distances = torch.sigmoid(distances) * self.crop_height
-        final = self.quant(final)
-        angle = self.angle(final)
-        angle = self.dequant(angle)
-        angle = torch.sigmoid(angle) * np.pi / 2
-        confidence = self.dequant(confidence)
-        return confidence, distances, angle
 
 def evaluate_net(model, images_folder):
     model.eval()
@@ -220,7 +47,7 @@ if __name__ == '__main__':
     parser.add_argument('--backends', type=str, default='fbgemm', help='Quantization backends')
     args = parser.parse_args()
 
-    net = FOTSModel_q()
+    net = FOTS_quanted()
     
     checkpoint_name = args.pretrain_model
     checkpoint = torch.load(checkpoint_name, map_location='cpu')

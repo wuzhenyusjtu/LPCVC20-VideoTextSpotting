@@ -9,26 +9,23 @@ import torch
 import torch.utils.data
 import tqdm
 
-import sys 
-sys.path.append("..") 
+# import sys
+# sys.path.append("..")
 
-from standard import datasets
-from standard.model import FOTSModel
-from prune.model_pruned import FOTSModel_pruned
-from modules.parse_polys import parse_polys
-from standard.test import val
+from data import datasets
+from test import val_one_epoch
 
 from utils.train_utils import load_multi, restore_checkpoint, save_checkpoint, fill_ohem_mask, detection_loss
 
 # Train and validate the model
 
-def train(model, loss_func, opt, lr_scheduler, max_batches_per_iter_cnt, train_dl, valid_dl, epoch):
+def train_one_epoch(model, loss_func, opt, lr_scheduler, max_batches_per_iter_cnt, train_loader, val_loader, epoch):
     model.train()
     train_loss_stats = 0.0
     test_loss_stats = 0.0
     loss_count_stats = 0
     batch_per_iter_cnt = 0
-    pbar = tqdm.tqdm(train_dl, 'Epoch ' + str(epoch), ncols=80)
+    pbar = tqdm.tqdm(train_loader, 'Epoch ' + str(epoch), ncols=80)
     
     for cropped, classification, regression, thetas, training_mask in pbar:
         if batch_per_iter_cnt == 0:
@@ -46,15 +43,15 @@ def train(model, loss_func, opt, lr_scheduler, max_batches_per_iter_cnt, train_d
             mean_loss = train_loss_stats / loss_count_stats
             pbar.set_postfix({'Mean loss': f'{mean_loss:.5f}'}, refresh=False)
     lr_scheduler.step(mean_loss, epoch)
-    if valid_dl is None:
+    if val_loader is None:
         val_loss = train_loss_stats / loss_count_stats
     else:
-        val_loss = val(model, loss_func, opt, max_batches_per_iter_cnt, valid_dl)
+        val_loss = val_one_epoch(model, loss_func, opt, max_batches_per_iter_cnt, val_loader)
     return mean_loss
 
-def fit(start_epoch, num_epochs, model, loss_func, opt, lr_scheduler, best_score, max_batches_per_iter_cnt, checkpoint_dir, train_dl, valid_dl):
+def fit(start_epoch, num_epochs, model, loss_func, opt, lr_scheduler, best_score, max_batches_per_iter_cnt, checkpoint_dir, train_loader, val_loader):
     for epoch in range(start_epoch, start_epoch + num_epochs):
-        val_loss = train(model, loss_func, opt, lr_scheduler, max_batches_per_iter_cnt, train_dl, valid_dl, epoch)
+        val_loss = train_one_epoch(model, loss_func, opt, lr_scheduler, max_batches_per_iter_cnt, train_loader, val_loader, epoch)
         if best_score > val_loss:
             best_score = val_loss
             save_as_best = True
@@ -80,30 +77,30 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     # Get dataloaders
-    dl_val = None
+    val_loader = None
     if args.train_folder_sample:
         # Merge SynthText dataset with sample dataset we generated from LPCV videos, use merged dataset for training and testing
         print('Use Merged dataset')
         # Set train as True to use data augmentation while training
         data_set = datasets.MergeText(args.train_folder_syn, args.train_folder_sample, datasets.transform, train=True)
-        dl = torch.utils.data.DataLoader(data_set, batch_size=args.batch_size, shuffle=True,
+        train_loader = torch.utils.data.DataLoader(data_set, batch_size=args.batch_size, shuffle=True,
                                      sampler=None, batch_sampler=None, num_workers=args.num_workers)
         if args.val:
             # Set train as False to disbale data augmentation while validating
             data_set_val = datasets.MergeText(args.train_folder_syn, args.train_folder_sample, datasets.transform, train=False)
-            dl_val = torch.utils.data.DataLoader(data_set_val, batch_size=1, shuffle=True,
+            val_loader = torch.utils.data.DataLoader(data_set_val, batch_size=1, shuffle=True,
                                          sampler=None, batch_sampler=None, num_workers=args.num_workers)            
     else:
         # Only use SynthText dataset
         print('Use SynthText dataset')
         # Set train as True to use data augmentation while training
         data_set = datasets.SynthText(args.train_folder_syn, datasets.transform, train=True)
-        dl = torch.utils.data.DataLoader(data_set, batch_size=args.batch_size, shuffle=True,
+        train_loader = torch.utils.data.DataLoader(data_set, batch_size=args.batch_size, shuffle=True,
                                      sampler=None, batch_sampler=None, num_workers=args.num_workers)
         if args.val:
             # Set train as False to disbale data augmentation while validating
             data_set_val = datasets.SynthText(args.train_folder_syn, datasets.transform, train=False)
-            dl_val = torch.utils.data.DataLoader(data_set_val, batch_size=1, shuffle=True,
+            val_loader = torch.utils.data.DataLoader(data_set_val, batch_size=1, shuffle=True,
                                          sampler=None, batch_sampler=None, num_workers=args.num_workers)
 
     checkpoint_dir = args.save_dir
@@ -114,4 +111,4 @@ if __name__ == '__main__':
     if args.ngpus > 1:
         print('Use parallel')
         model = torch.nn.DataParallel(model)
-    fit(epoch, args.epochs, model, detection_loss, optimizer, lr_scheduler, best_score, args.batches_before_train, checkpoint_dir, dl, dl_val)
+    fit(epoch, args.epochs, model, detection_loss, optimizer, lr_scheduler, best_score, args.batches_before_train, checkpoint_dir, train_loader, val_loader)

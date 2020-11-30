@@ -24,7 +24,7 @@ model_urls = {
 import sys 
 sys.path.append("..") 
 
-from standard.model import conv, Decoder
+from models.fots import conv, Decoder
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     # 3x3 convolution with padding
@@ -81,16 +81,18 @@ class BasicBlock(nn.Module):
         return out
 
 class _ResNet(nn.Module):
-    def __init__(self, block, layers, num_classes=1000, zero_init_residual=False,
-                groups=1, width_per_group=64, replace_stride_with_dilation=None, norm_layer=None):
+    def __init__(self, block, layers, num_classes=1000, groups=1, width_per_group=64,
+                 replace_stride_with_dilation=None, norm_layer=None):
         super(_ResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
-        
+
+        """
         # Original code
-        #self.inplanes = 64
-        
+        self.inplanes = 64
+        """
+
         # Set new inplaces as 32
         self.inplanes = 32
         self.dilation = 1
@@ -104,13 +106,15 @@ class _ResNet(nn.Module):
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=False)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        
+
+        """
         # Original code
-        #self.layer1 = self._make_layer(block, 64, layers[0])
-        #self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
-        #self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
-        #self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
-        
+        self.layer1 = self._make_layer(block, 64, layers[0])
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
+        """
+
         # Set layers with new channels
         self.layer1 = self._make_layer(block, 32, layers[0])
         self.layer2 = self._make_layer(block, 64, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
@@ -126,13 +130,6 @@ class _ResNet(nn.Module):
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-        
-        if zero_init_residual:
-            for m in self.modules():
-                if isinstance(m, Bottleneck):
-                    nn.init.constant_(m.nb3.weight, 0)
-                elif isinstance(m, BasicBlock):
-                    nn.init.constant_(m.bn2.weight, 0)
     
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
         norm_layer = self._norm_layer
@@ -176,7 +173,7 @@ class _ResNet(nn.Module):
     def forward(self, x):
         return self._forward_impl(x)
 
-class FOTSModel_pruned(nn.Module):
+class FOTS_pruned(nn.Module):
     def __init__(self, crop_height=640):
         super().__init__()
         self.crop_height = crop_height
@@ -201,16 +198,18 @@ class FOTSModel_pruned(nn.Module):
         self.decoder1 = Decoder(128, 32)
         self.remove_artifacts = conv(64, 64)
 
-        #Original code        
-        #self.center = nn.Sequential(
-            #conv(512, 512, stride=2),
-            #conv(512, 1024)
-        #)
-        #self.decoder4 = Decoder(1024, 512)
-        #self.decoder3 = Decoder(1024, 256)
-        #self.decoder2 = Decoder(512, 128)
-        #self.decoder1 = Decoder(256, 64)
-        #self.remove_artifacts = conv(128, 64)
+        """
+        # Original code        
+        self.center = nn.Sequential(
+            conv(512, 512, stride=2),
+            conv(512, 1024)
+        )
+        self.decoder4 = Decoder(1024, 512)
+        self.decoder3 = Decoder(1024, 256)
+        self.decoder2 = Decoder(512, 128)
+        self.decoder1 = Decoder(256, 64)
+        self.remove_artifacts = conv(128, 64)
+        """
 
         self.confidence = conv(64, 1, kernel_size=1, padding=0, bn=False, relu=False)
         self.distances = conv(64, 4, kernel_size=1, padding=0, bn=False, relu=False)

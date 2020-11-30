@@ -1,23 +1,14 @@
 import sys 
 sys.path.append("..") 
 
-from standard.model import FOTSModel
-from modules.parse_polys import parse_polys
+from models.fots import FOTS
 import argparse
-import math
 
-import cv2
-import numpy as np
-import numpy.random as nprnd
-import os
-import torch
 import torch.utils.data
-import tqdm
 
-import standard.datasets as datasets
-from standard.train import train
+from data import datasets
+from train import train_one_epoch
 from nni.compression.torch import L1FilterPruner
-import time
 from utils.train_utils import detection_loss, load_multi
 
 if __name__ == '__main__':
@@ -34,7 +25,7 @@ if __name__ == '__main__':
     parser.add_argument('--val', action='store_true', help='Use validation')
     args = parser.parse_args()
     
-    model = FOTSModel().to(torch.device("cuda"))
+    model = FOTS().to(torch.device("cuda"))
     model = model.eval()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
     lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=32, \
@@ -89,5 +80,5 @@ if __name__ == '__main__':
     for epoch in range(50):
         pruner.update_epoch(epoch)
         print('# Epoch {} #'.format(epoch))
-        val_loss = train(model, detection_loss, optimizer, lr_scheduler, max_batches_per_iter_cnt, dl, dl_val, epoch)
+        val_loss = train_one_epoch(model, detection_loss, optimizer, lr_scheduler, max_batches_per_iter_cnt, dl, dl_val, epoch)
         pruner.export_model(model_path='{}/pruned_fots{}.pth'.format(output_path, epoch), mask_path='{}/mask_fots{}.pth'.format(output_path, epoch))

@@ -61,7 +61,7 @@ Export pruned model
 Export the pruned model by running command: (More information please check export_prune_mode.py)
 
 ```sh
-python3 export_crnn.py  --pretrained /path/to/pruned/model --expr_dir /path/to/save/dir
+python3 export_pruned_crnn.py  --pretrained /path/to/pruned/model --expr_dir /path/to/save/dir
 ```
 Then you have a pruned model with lighter architecture at the target directory.
 

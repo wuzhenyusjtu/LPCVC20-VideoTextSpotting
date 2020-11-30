@@ -8,7 +8,7 @@ import cv2
 import os
 import nltk
 import argparse
-from models.quantized_crnn import CRNN_quanted
+from models.quanted_crnn import CRNN_quanted
 
 # New load fucntion for CRNN
 def load_multi(model_path):

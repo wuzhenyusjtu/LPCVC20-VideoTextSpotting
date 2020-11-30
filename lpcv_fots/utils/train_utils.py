@@ -12,8 +12,8 @@ import sys
 sys.path.append("..") 
 
 # import datasets
-from standard.model import FOTSModel
-from prune.model_pruned import FOTSModel_pruned
+from models.fots import FOTS
+from models.pruned_fots import FOTS_pruned
 
 # Load model trained with multi gpus
 def load_multi(model_path):
@@ -28,9 +28,9 @@ def load_multi(model_path):
 # Restore model, optmizer, lr scheduler, score etc. from .pt file
 def restore_checkpoint(contunue, model_name=None, prune=False):
     if prune:
-        model = FOTSModel_pruned().to(torch.device("cuda"))
+        model = FOTS_pruned().to(torch.device("cuda"))
     else:
-        model = FOTSModel().to(torch.device("cuda"))
+        model = FOTS().to(torch.device("cuda"))
     print(model)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
     lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=32, verbose=True, threshold=0.05, threshold_mode='rel')

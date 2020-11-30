@@ -8,15 +8,13 @@ import torch.nn.functional as F
 import torchvision
 import argparse
 
-from quantize.model_q import FOTSModel_q
-from utils.train_utils import load_multi
+from models.quanted_fots import FOTS_q
 
 import os
 import cv2
 import torch.optim as optim
 import math
 from sklearn.metrics import roc_curve
-from sklearn.metrics import precision_recall_curve
 import sklearn.metrics as metrics
 
 # Define new conv method
@@ -29,7 +27,7 @@ def conv(in_channels, out_channels, kernel_size=3, padding=1, bn=True, dilation=
     return nn.Sequential(*modules)
 
 # Add different classification head in forward process.
-class clf_FOTS(FOTSModel_q):
+class clf_FOTS(FOTS_q):
     def __init__(self, crop_height=640):
         super().__init__(crop_height)
         self.avgpool = nn.AdaptiveAvgPool2d((1,1))
