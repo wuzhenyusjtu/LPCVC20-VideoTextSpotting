@@ -1,6 +1,6 @@
 import torch
 from torch.autograd import Variable
-import misc
+import utils.misc as misc
 
 def validate_one_epoch(crnn, val_loader, criterion, converter, opt, logger=None, max_iter=100):
     if logger:
@@ -127,3 +127,6 @@ def train_one_epoch(crnn, train_loader, val_loader, criterion, optimizer, conver
                 logger.info("Model saved to {}/netCRNN_{}_{}.pth".format(opt.expr_dir, epoch, i))
             else:
                 print("Model saved to {}/netCRNN_{}_{}.pth".format(opt.expr_dir, epoch, i))
+    print("Model saved")
+    torch.save(crnn.state_dict(), '{0}/netCRNN_{1}.pth'.format(opt.expr_dir, epoch))
+    logger.info("Model saved to {}/netCRNN_{}.pth".format(opt.expr_dir, epoch))

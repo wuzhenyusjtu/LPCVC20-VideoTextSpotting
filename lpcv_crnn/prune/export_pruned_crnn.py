@@ -2,6 +2,9 @@
 from __future__ import print_function
 from __future__ import division
 
+import sys
+sys.path.append("..") 
+
 import argparse
 import random
 import torch.utils.data
@@ -9,7 +12,7 @@ import torch.nn as nn
 import numpy as np
 import os
 from utils import misc
-import dataset
+import data.dataset as dataset
 
 from models.crnn import CRNN
 from utils.misc import load_multi

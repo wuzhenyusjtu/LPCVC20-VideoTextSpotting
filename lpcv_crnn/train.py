@@ -10,7 +10,7 @@ import torch.utils.data
 import numpy as np
 from warpctc_pytorch import CTCLoss
 import os
-import misc
+import utils.misc as misc
 from data import dataset
 
 import logging
@@ -153,7 +153,7 @@ if __name__=='__main__':
         if logger:
             logger.info('loading pretrained model from %s' % opt.pretrained)
         else:
-            logger.info('loading pretrained model from %s' % opt.pretrained)
+            print('loading pretrained model from %s' % opt.pretrained)
         
         if not opt.finetune:
             crnn.load_state_dict(misc.load_multi(opt.pretrained), strict=True)
