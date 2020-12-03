@@ -13,7 +13,8 @@ import tqdm
 # sys.path.append("..")
 
 from data import datasets
-from test import val_one_epoch
+# from test import val_one_epoch
+from validation import val_one_epoch
 
 from utils.train_utils import load_multi, restore_checkpoint, save_checkpoint, fill_ohem_mask, detection_loss
 

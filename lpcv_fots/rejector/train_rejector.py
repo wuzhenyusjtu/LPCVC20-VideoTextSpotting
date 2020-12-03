@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import torchvision
 import argparse
 
-from models.quanted_fots import FOTS_q
+from models.pruned_fots import FOTS_pruned as FOTS_q
 
 import os
 import cv2
@@ -160,7 +160,8 @@ if __name__ == '__main__':
 
     checkpoint_name = args.pretrain_model
     checkpoint = torch.load(checkpoint_name, map_location='cpu')
-    clf.load_state_dict(checkpoint['model_state_dict'], strict=False)
+#     clf.load_state_dict(checkpoint['model_state_dict'], strict=False)
+    clf.load_state_dict(checkpoint, strict=False)
 
     need_grads = ['fc.weight','fc.bias','last_conv.weight','last_conv.bias',\
              'down_conv.0.weight', 'down_conv.0.bias', 'down_conv.1.weight', 'down_conv.1.bias']

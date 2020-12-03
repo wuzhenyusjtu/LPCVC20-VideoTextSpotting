@@ -264,15 +264,8 @@ if __name__ == '__main__':
         return last_channels, new_dict
     
     def process_decoder(old_layer, target_layer, last_channels):
-        try:
-            last_channels, new_dict = copy_decoder(last_channels, list(old_layer.squeeze._modules.items()))
-            target_layer.squeeze = nn.Sequential(
-                    new_dict['0'],
-                    new_dict['1'],
-                    new_dict['2'],)
-        except:
-            last_channels, new_dict = copy_decoder(last_channels, list(old_layer._modules.items()))
-            target_layer = nn.Sequential(
+        last_channels, new_dict = copy_decoder(last_channels, list(old_layer.squeeze._modules.items()))
+        target_layer.squeeze = nn.Sequential(
                     new_dict['0'],
                     new_dict['1'],
                     new_dict['2'],)
@@ -297,7 +290,31 @@ if __name__ == '__main__':
     last_d1_channels = process_decoder(model.decoder1, model_new.decoder1, last_channels)
     
     last_channels = get_merged_channels(last_d1_channels, last_down_channels_1)
-    last_art_channels = process_decoder(model.remove_artifacts, model_new.remove_artifacts, last_channels)
+#     last_art_channels = process_arti(model.remove_artifacts, model_new.remove_artifacts, last_channels)
+
+    # Code for remove_artifacts layer
+    
+    fots_l = list(model.remove_artifacts._modules.items())
+    new_dict_art = {}
+    for i in range(len(fots_l)):
+        module_b = fots_l[i][1]
+        if isinstance(module_b, torch.nn.Conv2d):
+            out_channels = get_out_channel(module_b)
+            new = set_weight_conv_in(last_channels, out_channels, module_b)
+            last_channels = out_channels
+            new_dict_art[fots_l[i][0]] = new
+        elif isinstance(module_b, torch.nn.BatchNorm2d):
+            new = set_bn_in(out_channels, module_b)
+            new_dict_art[fots_l[i][0]] = new
+        elif isinstance(module_b, torch.nn.ReLU):
+            new_dict_art[fots_l[i][0]] = module_b
+
+    model_new.remove_artifacts = nn.Sequential(
+                new_dict_art['0'],
+                new_dict_art['1'],
+                new_dict_art['2'],
+        )
+    last_art_channels = last_channels
     
     # Code for final three convs
     def copy_last_convs(old_layer, target_layer, last_art_channels):
