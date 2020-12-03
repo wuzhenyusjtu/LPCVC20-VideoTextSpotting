@@ -83,3 +83,16 @@ Command:
 python3 quantize_model.py --pruned /path/to/exported/model --expr_dir /path/to/saved/dir --qconfig qnnpack
 ```
 ```--qconfig``` parameter sets the configure of quantization. It should be either ```qnnpack``` or ```fbgemm```. Please check ```quantize_model.py``` for detailed information.
+
+Test model
+-----------------
+
+Command for testing original model:
+```sh
+python3 test.py --adadelta --valRoot /path/to/test/sample/crnn/dataset  --cuda --pretrained /path/to/exported/model
+```
+Command for testing exported pruned model:
+```sh
+python3 test.py --adadelta --valRoot /path/to/test/sample/crnn/dataset  --cuda --finetune --pretrained /path/to/exported/model
+```
+```test.py```provides method to test different models. 
