@@ -85,13 +85,13 @@ You can test the model's performance by running test_sample.py file. Only suppor
 1. Test original trained model
 
 ```sh
-    python3 test.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pretrained/model
+    python3 validation.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pretrained/model
 ```
 
 2. Test exported pruned model
 
 ```sh
-    python3 test.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pruned/model --prune
+    python3 validation.py --test-folder-sample /path/to/SampleDataset --batch-size 1 --batches-before-train 1 --pretrain-model /path/to/pruned/model --prune
 ```
 
 ### Model Link
@@ -134,8 +134,6 @@ After we finetune the pruned model, we train rejector for early exit. Our though
     --epochs 6 --pretrain-model /path/to/export/pruned/model
     ```
 
-
-
 ## Quantize Model
 
 After we finetuned, pruned fots model, the final step is to quantize it. For quantization details, please check ```quantize_model.py```. Run the command:
@@ -145,3 +143,10 @@ python3 quantize_model.py --calibrate-folder /path/to/calibrate/dir --pretrain-m
 --backends fbgemm --save-dir /path/to/save/dir
 ```
 
+## Some Dataset Examples
+
+All these data can be found on 214 server. 
+1. SynthText Dataset path: /data/yunhe/SynthText
+2. Sample Dataset path: /data/yunhe (directories: train_images1, test_images1, sample_train_annotation_txt, sample_test_annotation_txt)
+3. Rejector Dataset: /data/yunhe/reject_data
+4. Calibrate Directory: /data/yunhe/crop_images/downsample_crop_10_3rd01 (and others)
