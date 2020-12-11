@@ -1,6 +1,5 @@
 # Data Annotation
-Directory LPCV_bbox_label includes codes for semi automatic annotation algorithm, rotate bounding boxes, change
-annotation format.
+
 ## Installation
 pip install -r requirements.txt
 ## Calibration
