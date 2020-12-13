@@ -1,8 +1,0 @@
-{
-  "model": "model/e2e-mlt.h5",
-  "codec": "codec.txt",
-  "ocr_model": "models/crnn.pth",
-  "segm_thresh": 0.5,
-  "rotated_box": true,
-  "image_font": "libs/Arial-Unicode-Regular.ttf"
-}
