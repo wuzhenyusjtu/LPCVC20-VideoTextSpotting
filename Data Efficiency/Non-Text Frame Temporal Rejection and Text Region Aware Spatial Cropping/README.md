@@ -6,11 +6,14 @@ pip install -r requirements.txt
 ## Usage
 python main.py input_video_path query_file_path
 ### Implementation
-1. Convert image to YUV format.
-2. Apply canny edge method for all Y U V format images.
-3. Sum up pixels for all canny images.
-4. Apply closing to the sum up images.
-5. Sum up pixel values among x and y directory and find peaks and mean values.
-6. Reject images with low mean pixel values or low peaks number.
-7. Skip images with extremely high mean pixels values.
-8. Crop images based on peaks.
+1. Downsample input image.
+2. Convert the down-sampled image to YUV format.
+3. Apply canny edge method for all YUV format images.
+4. Sum up pixels for canny images converted from YUV format images.
+5. Apply closing to the sum up image.
+6. Sum up pixel values among x and y directory for the closing image.
+7. Find peaks and mean values for the sum up values for both x-axis and y-axis.
+8. Reject images with low mean pixel values (preset threshold) or 
+   low peaks number (preset threshold, default <=2).
+9. Skip images with extremely high mean pixels values (Ignore images with complicated background).
+10. Crop images based on peaks (default pick peak[1] and peak[len(peak)-2]).

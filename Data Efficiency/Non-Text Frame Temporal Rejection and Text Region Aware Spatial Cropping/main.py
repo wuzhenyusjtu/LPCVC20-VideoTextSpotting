@@ -1,22 +1,11 @@
 #!python3
 
 import argparse
-import glob
-import tempfile
-import json
 import os
-import sys
-import copy
-
 import cv2
-from ocr_lib import OCRLib
+import numpy as np
 import time
-
-from libs.utils import dsample_image
-
-from edit import edit_distance
-
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config.json')
+from scipy.signal import find_peaks
 
 
 def parse_args():
@@ -27,9 +16,6 @@ def parse_args():
         "--input_video", help="Path to the input video", type=str, required=True
     )
     parser.add_argument(
-        "--query_file", help="Path of question text file", type=str, required=True
-    )
-    parser.add_argument(
         "--results_path",
         help="Path to store the results from video",
         default=None,
@@ -38,12 +24,6 @@ def parse_args():
 
     parser.add_argument(
         "--sampling_rate", help="Sample every x frames", default=30, type=int
-    )
-    parser.add_argument(
-        "--rcg_scr_th", help="Threshold for kept text", default=0.70, type=float
-    )
-    parser.add_argument(
-        "--config_file", type=str, help="OCRLib config json file", required=True
     )
 
     args = parser.parse_args()
@@ -59,39 +39,86 @@ def parse_args():
     return args
 
 
-def load_result_index(results_path, rcg_scr_th):
-    # a translation table to remove the punctuations
-    trans_table = dict.fromkeys(map(ord, '!*^&$@,.:;'), None)
-    json_files = glob.glob(os.path.join(results_path, "*.json"))
-    txt2frm, frm2txt = {}, {}
-    for json_file in json_files:
-        frame_no = int(os.path.splitext(os.path.basename(json_file))[0])
-        with open(json_file, "r") as h_input:
-            results = json.load(h_input)
-
-        frm2txt[frame_no] = []
-        for result in results:
-            #             if result["rcg_scr"] > rcg_scr_th:
-            # remove
-            #             text = result["rcg_str"].upper()
-            text = result.upper()
-            text = text.translate(trans_table)
-            frm2txt[frame_no].append(text)
-            if text in txt2frm:
-                txt2frm[text].append(frame_no)
-            else:
-                txt2frm[text] = [frame_no]
-
-    return txt2frm, frm2txt
+def dsample_image(img, ksize):
+    h, w = img.shape[:2]
+    resized_img = np.lib.stride_tricks.as_strided(
+        img,
+        shape=(int(h / ksize), int(w / ksize), ksize, ksize, 3),
+        strides=img.itemsize * np.array([ksize * w * 3, ksize * 3, w * 3, 1 * 3, 1]))
+    return resized_img[:, :, 0, 0].copy()
 
 
-def process_video(input_video, cfg_fn, results_path, sampling_rate):
-    reader = OCRLib(cfg_fn)
-    vidcap = cv2.VideoCapture(input_video)
+def apply_canny(img, sigma=0.33):
+    v = np.median(img)
+    lower = int(max(0, (1.0-sigma)*v))
+    upper = int(min(255, (1.0+sigma)*v))
+    return cv2.Canny(img, lower, upper)
+
+
+def skip_images(mean_x, mean_y):
+    if mean_x > 12000 and mean_y > 15000:
+        return True
+    else:
+        return False
+
+
+def reject(peaks_x, peaks_y, mean_x, mean_y):
+    if (mean_x < 400 and mean_y < 400) or len(peaks_x) <= 1 or len(peaks_y) <= 1:
+        return False
+    else:
+        return True
+
+
+def select(input_image):
+    yuv_img = cv2.cvtColor(input_image, cv2.COLOR_BGR2YUV)
+    canny_gray = apply_canny(yuv_img[:, :, 0])
+    canny_U = apply_canny(yuv_img[:, :, 1])
+    canny_V = apply_canny(yuv_img[:, :, 2])
+    auto = canny_U | canny_V | canny_gray
+
+    kernel = np.ones((5, 5), np.uint8)
+    closing = cv2.morphologyEx(auto, cv2.MORPH_CLOSE, kernel)
+    hist_x = np.sum(closing, axis=0)
+    hist_y = np.sum(closing, axis=1)
+    mean_x = np.mean(hist_x)
+    mean_y = np.mean(hist_y)
+    peaks_x, _ = find_peaks(hist_x)
+    peaks_y, _ = find_peaks(hist_y)
+
+    # First stage rejecter and cropping + second stage rejecter
+    if reject(peaks_x, peaks_y, mean_x, mean_y):
+
+        if skip_images(mean_x, mean_y):
+            xmin, xmax, ymin, ymax = int(peaks_x[0]), int(peaks_x[-1]), int(peaks_y[0]), int(peaks_y[-1])
+            return input_image[ymin:ymax, xmin:xmax]
+        else:
+            xmin, xmax, ymin, ymax = int(peaks_x[0]), int(peaks_x[-1]), int(peaks_y[0]), int(peaks_y[-1])
+
+        if xmin > 15:
+            xmin -= 15
+        if xmax < len(hist_x) - 15:
+            xmax += 15
+        if ymin > 15:
+            ymin -= 15
+        if ymax < len(hist_y) - 15:
+            ymax += 15
+        return input_image[ymin:ymax, xmin:xmax]
+
+    # Rejected by first stage rejecter
+    else:
+        return np.array([])
+
+
+def main():
+    # Default way provided by FB to run the script for parsing arguments
+    args = parse_args()
+    vidcap = cv2.VideoCapture(args.input_video)
     assert vidcap.isOpened()
 
     success = True
     cnt = 0
+
+    sampling_rate = args.sampling_rate
     while success:
         success, img = vidcap.read()
         cnt += 1
@@ -103,11 +130,9 @@ def process_video(input_video, cfg_fn, results_path, sampling_rate):
             continue
         # print("Frame Num:{}".format(cnt))
         ocr_start = time.time()
-        frm_output = os.path.join(results_path, "{}.json".format(cnt))
+        frm_output = os.path.join(args.results_path, "{}.jpg".format(cnt))
+        image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        ori_image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-        image = copy.deepcopy(ori_image)
         h, w = image.shape[:2]
         if h == 2160 and w == 3840:
             k_size = 4
@@ -117,119 +142,10 @@ def process_video(input_video, cfg_fn, results_path, sampling_rate):
             k_size = 1  # Just for robustness
         # Down sample image
         image = dsample_image(image, k_size)
-        results = reader.process_rgb_image(image)
-        print(results)
-        with open(frm_output, "w") as h_out:
-            json.dump(results, h_out)
+        image = select(image)
         ocr_end = time.time()
-        print("[INFO] single frame took {:.4f} seconds including writing to disk".format(ocr_end - ocr_start))
-
-
-def del_conseq_frm(txt2frm, sample_rate):
-    new_txt2frm = {}
-    for key, value in txt2frm.items():
-        list(set(value)).sort()
-        t_cnt = 1
-        new_value = [value[0]]
-        for i in range(len(value) - 1):
-            if value[i + 1] - value[i] <= sample_rate:
-                t_cnt += 1
-            else:
-                if t_cnt > 1:
-                    if len(new_value) > 0:
-                        new_value.pop()
-                    new_value.append(value[i - int(t_cnt / 2)])
-                    t_cnt = 1
-                new_value.append(value[i + 1])
-        new_txt2frm[key] = new_value
-    return new_txt2frm
-
-
-def get_frm_res(frms, query, frm2txt):
-    outputs = ""
-    q_cnt = 0
-    if len(frms) == 1:
-        for x in frm2txt[frms[0]]:
-            if x == query and q_cnt == 0:
-                q_cnt += 1
-                continue
-            outputs += " {}".format(x)
-    else:
-        for frm in frms:
-            for x in frm2txt[frm]:
-                if x == query and q_cnt == 0:
-                    q_cnt += 1
-                    continue
-                outputs += " {}".format(x)
-    return outputs
-
-
-def query_video(
-        query_file, input_video, results_path, config_file=CONFIG_FILE, sampling_rate=50, rcg_scr_th=0.70
-):
-    print(input_video)
-    # answer should be only answer.txt
-    ans_file = 'answers.txt'
-    # Process video
-    process_video(input_video, config_file, results_path, sampling_rate)
-
-    # Create database lookup
-    txt2frm, frm2txt = load_result_index(results_path, rcg_scr_th)
-    # print(frm2txt)
-
-    # Get new txt2frm
-    new_txt2frm = del_conseq_frm(txt2frm, sampling_rate)
-
-    # Query results
-    with open(query_file, "r") as f_query:
-        queries = f_query.read().replace(" ", "").replace("\n", "").split(";")
-
-    # remove old answer.txt
-    with open(ans_file, "w", newline='') as f:
-        for query in queries:
-            if query == '':
-                continue
-            query = query.upper()
-            if query not in new_txt2frm:
-                target = query
-                target_t = ''
-                min_d = len(target)
-                for key in new_txt2frm.keys():
-                    dis = edit_distance(target, key)
-                    if dis < min_d:
-                        min_d = dis
-                        target_t = key
-                        # print question only
-                if min_d <= 2:
-                    frms = new_txt2frm[target_t]
-                    outputs = get_frm_res(frms, target_t, frm2txt)
-                    q_ans = "{}: {};".format(query, outputs)
-                    print(q_ans)
-                else:
-                    q_ans = "{}:;".format(query)
-                    print(q_ans)
-            else:
-                frms = txt2frm[query]
-                outputs = get_frm_res(frms, query, frm2txt)
-                q_ans = "{}: {};".format(query, outputs)
-                print(q_ans)
-            # output save to a actual file
-            f.write(q_ans)
-
-
-def main():
-    # Default way provided by FB to run the script for parsing arguments
-    # args = parse_args()
-
-    # Only Works for submission
-    with tempfile.TemporaryDirectory() as results_path:
-        print("OCR Start!")
-        start = time.time()
-        # query_video(**vars(args))
-        query_video(input_video=sys.argv[1], query_file=sys.argv[2], results_path=results_path)
-        print('ORC Done!')
-        end = time.time()
-        print("Total time: {} second ".format(end - start))
+        print("[INFO] single frame took {:.4f} seconds to select".format(ocr_end - ocr_start))
+        cv2.imwrite(frm_output, image)
 
 
 if __name__ == "__main__":
