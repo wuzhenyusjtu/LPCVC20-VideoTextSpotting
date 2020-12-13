@@ -1,10 +1,9 @@
 # Non-Text Frame Temporal Rejection and Text Region Aware Spatial Cropping
-Directory includes codes for solution for LPCV 2020 competition, which includes non-text frame temporal rejection and text region
-aware spatial cropping, OCR detection based on EAST model and recognition based on CRNN model.
+Directory includes codes for improving data efficiency based on traditional computer vision methods. The codes includes non-text frame temporal rejection and text region aware spatial cropping.
 ## Installation
 pip install -r requirements.txt
 ## Usage
-python main.py input_video_path query_file_path
+python main.py --input_video input_video_path
 ### Implementation
 1. Downsample input image.
 2. Convert the down-sampled image to YUV format.
