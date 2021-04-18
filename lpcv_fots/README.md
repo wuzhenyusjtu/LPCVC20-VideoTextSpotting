@@ -9,8 +9,8 @@ We did the following steps in our work:
 2. Prune FOTS model with [NNI](https://github.com/microsoft/nni). Please check [prune](./prune)
 3. Prune out channels with zero-weight and get pruned model. Please check [prune](./prune)
 4. Finetune pruned model with Merged Dataset. Please check [standard](./standard)
-5. Add rejector to FOTS, freeze other parts and only train rejector. Please check [rejector](./rejector)
 5. Quantize FOTS model with pytorch quantization package. Please check [quantize](./quantize)
+6. Add rejector to FOTS, train SVM rejector to detect out-of-distribution frames at encoder 3 layers. Please check [rejector](./rejector)
 
 ## LPCV FOTS Standard Training
 ### Dataset
@@ -117,23 +117,6 @@ Use ```export_pruned_fots.py``` to export actual pruned model from pruned masked
 ```
 
 
-## Train Rejector
-
-After we finetune the pruned model, we train rejector for early exit. Our thought is that it is much easier to answer whether there is text in one frame comparing to answer where is the text. We add two conv layers and one fully connected layer after block 2 of Resnet as rejector. Details can be found in ```train_rejector.py``` and ```model_q.py```
-
-1. Dataset 
-
-    We run the exported pruned model on the Sample Dataset. If one image's predicted result is None, we set the label for this image as 0, otherwise set its label as. More information please check ```train_rejector```.
-
-2. Train rejector
-
-    We freeze the original weights and only train the rejector. Run the command:
-
-    ```sh
-    python3 train_rejector.py --rejector-folder /path/to/rejector/dataset --save-dir /path/to/save/dir \
-    --epochs 6 --pretrain-model /path/to/export/pruned/model
-    ```
-
 ## Quantize Model
 
 After we finetuned, pruned fots model, the final step is to quantize it. For quantization details, please check ```quantize_model.py```. Run the command:
@@ -143,10 +126,26 @@ python3 quantize_model.py --calibrate-folder /path/to/calibrate/dir --pretrain-m
 --backends fbgemm --save-dir /path/to/save/dir
 ```
 
-## Some Dataset Examples
 
-All these data can be found on 214 server. 
-1. SynthText Dataset path: /data/yunhe/SynthText
-2. Sample Dataset path: /data/yunhe (directories: train_images1, test_images1, sample_train_annotation_txt, sample_test_annotation_txt)
-3. Rejector Dataset: /data/yunhe/reject_data
-4. Calibrate Directory: /data/yunhe/crop_images/downsample_crop_10_3rd01 (and others)
+## Train Rejector
+
+After we quantize the finetuned pruned model, we train rejector for early exit. Our thought is that it is much easier to answer whether there is text in one frame comparing to answer where is the text. We add two conv layers and one fully connected layer after block 2 of Resnet as rejector. Details can be found in ```train_rejector.py``` and ```model_q.py```
+
+1. Dataset 
+
+    We run the quantized model on the Sample Dataset. If one image's predicted result is None, we set the label for this image as 0, otherwise set its label as. More information please check ```train_rejector```.
+    ```sh
+    python3 train_rejector.py --rejector-folder /path/to/rejector/dataset --save-dir /path/to/save/dir \
+    --epochs 6 --pretrain-model /path/to/export/pruned/model
+    ```
+   
+2. Train rejector
+
+    We freeze the original weights and only train the rejector. Run the command:
+
+    ```sh
+    python3 feature_extraction.py --trainRoot /path/to/train/image/dataset --testRoot /path/to/test/image/dataset \
+    --pretrained /path/to/quantized/part1/model --expr_train_dir /path/to/export/train/features \
+    --expr_test_dir /path/to/export/test/features
+    ```
+   
