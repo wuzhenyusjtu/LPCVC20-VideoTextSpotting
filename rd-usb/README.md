@@ -58,6 +58,13 @@ and `pip` with `C:\Python37\python.exe -m pip install -r requirements.txt`.
 
 On Linux use `python3` and `pip3`.
 
+Running Instructions
+--
+1. To run the code python web.py
+2. Change line number 206 in webapp/backend.py to your the project root location
+3. Run inference on Raspberry Pi and obtain timestamp.csv. Copy it to the project root location
+4. Run python energy_measurement.py to get the energy measurements
+
 Usage
 --
 
